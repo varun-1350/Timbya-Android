@@ -8,6 +8,7 @@ import android.provider.Settings;
 
 import androidx.annotation.Nullable;
 
+import com.example.timbya.overlay.OverlayCallbacks;
 import com.example.timbya.overlay.OverlayController;
 
 public class OverlayService extends Service {
@@ -26,8 +27,14 @@ public class OverlayService extends Service {
         } else {
             startService(new Intent(this, OverlayService.class));
         }
-        controller=
-                new OverlayController(this);
+        controller = new OverlayController(this, new OverlayCallbacks() {
+            @Override
+            public void onMicPressed() {
+
+                // Stage 8 will start speech recognition here
+
+            }
+        });
 
         controller.show();
 

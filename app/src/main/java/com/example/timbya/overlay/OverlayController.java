@@ -6,68 +6,85 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageButton;
+import android.widget.TextView;
 
 import com.example.timbya.R;
 
 public class OverlayController {
 
     private final Context context;
-
     private final WindowManager windowManager;
+    private final OverlayCallbacks callbacks;
 
     private View overlayView;
 
-    public OverlayController(Context context){
+    private TextView status;
+    private TextView reply;
+    private ImageButton mic;
 
-        this.context=context;
-
-        windowManager=(WindowManager)
-                context.getSystemService(Context.WINDOW_SERVICE);
-
+    public OverlayController(Context context, OverlayCallbacks callbacks) {
+        this.context = context;
+        this.callbacks = callbacks;
+        this.windowManager =
+                (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
     }
 
-    public void show(){
+    public void show() {
 
-        if(overlayView!=null)
+        if (overlayView != null)
             return;
 
-        overlayView=
-                LayoutInflater.from(context)
-                        .inflate(
-                                R.layout.overlay_layout,
-                                null);
+        overlayView = LayoutInflater.from(context)
+                .inflate(R.layout.overlay_layout, null);
 
-        WindowManager.LayoutParams params=
+        // Initialize views AFTER inflating the layout
+        status = overlayView.findViewById(R.id.status);
+        reply = overlayView.findViewById(R.id.reply);
+        mic = overlayView.findViewById(R.id.mic);
+
+        mic.setOnClickListener(v -> {
+            if (callbacks != null) {
+                callbacks.onMicPressed();
+            }
+        });
+
+        WindowManager.LayoutParams params =
                 new WindowManager.LayoutParams(
-
-                        300,
-
                         WindowManager.LayoutParams.WRAP_CONTENT,
-
+                        WindowManager.LayoutParams.WRAP_CONTENT,
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                        PixelFormat.TRANSLUCENT
+                );
 
-                        PixelFormat.TRANSLUCENT);
+        params.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
 
-        params.gravity=
-                Gravity.END|Gravity.CENTER_VERTICAL;
-
-        windowManager.addView(
-                overlayView,
-                params);
-
+        windowManager.addView(overlayView, params);
     }
 
-    public void hide(){
+    public void setStatus(String text) {
+        if (status != null) {
+            status.setText(text);
+        }
+    }
 
-        if(overlayView==null)
+    public void setReply(String text) {
+        if (reply != null) {
+            reply.setText(text);
+        }
+    }
+
+    public void hide() {
+
+        if (overlayView == null)
             return;
 
         windowManager.removeView(overlayView);
 
-        overlayView=null;
-
+        overlayView = null;
+        status = null;
+        reply = null;
+        mic = null;
     }
-
 }
