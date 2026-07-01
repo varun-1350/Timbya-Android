@@ -2,8 +2,9 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="timbya_glass_bg">#33121229</color>
-    <color name="timbya_glass_border">#4DFFFFFF</color>
-    <color name="timbya_neon_blue">#4D8AFFFF</color>
-    <color name="timbya_neon_purple">#4DB388FF</color>
+    <color name="timbya_glass_bg">#EB141428</color>
+    <color name="timbya_glass_border">#66FFFFFF</color>
+    <color name="timbya_chip_bg">#40FFFFFF</color>
+    <color name="timbya_neon_blue">#5CE1FF</color>
+    <color name="timbya_neon_purple">#B388FF</color>
 </resources>

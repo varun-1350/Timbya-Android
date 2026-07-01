@@ -2,7 +2,10 @@ package com.example.timbya.speech;
 
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -32,10 +35,16 @@ public class SpeechManager {
     private boolean isListening = false;
     private boolean shouldRestart = false;
     private boolean isMuted = false;
+    private static final long RESTART_DELAY_MS = 300;
+    private static final long BEEP_MUTE_MS = 700;
 
+    private  Handler mainHandler;
+    AudioManager audioManager;
     public SpeechManager(Context context) {
 
         Context appContext = context.getApplicationContext();
+        audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
+
 
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             Log.e(TAG, "Speech recognition not available on this device");
@@ -45,6 +54,15 @@ public class SpeechManager {
 
         recognizer = SpeechRecognizer.createSpeechRecognizer(appContext);
         recognizer.setRecognitionListener(new InternalListener());
+        mainHandler = new Handler(Looper.getMainLooper());
+    }
+
+
+    /** A short delay before restarting - starting immediately after
+     *  cancel()/stopListening() is a known source of ERROR_RECOGNIZER_BUSY
+     *  on some devices, which is what was silently breaking turn #2+. */
+    private void scheduleRestart() {
+        mainHandler.postDelayed(this::beginSession, RESTART_DELAY_MS);
     }
 
     /** Begin continuous listening. Safe to call repeatedly. */
@@ -71,18 +89,21 @@ public class SpeechManager {
         notifyMicStatus("Mic off");
     }
 
-    /** Pause listening without ending continuous mode (e.g. while speaking). */
+    /**
+     * cancel() instead of stopListening(): cancel aborts immediately with
+     * no final onResults/onError, so it can't race with the auto-restart
+     * loop or leave the recognizer half-torn-down when we resume.
+     */
     public void mute() {
         isMuted = true;
-        if (recognizer != null) recognizer.stopListening();
+        if (recognizer != null) recognizer.cancel();
         isListening = false;
         notifyMicStatus("Mic muted (speaking)");
     }
 
-    /** Resume listening after mute(). */
     public void resume() {
         isMuted = false;
-        if (shouldRestart) beginSession();
+        if (shouldRestart) scheduleRestart();
     }
 
     public void destroy() {
@@ -90,7 +111,23 @@ public class SpeechManager {
         if (recognizer != null) recognizer.destroy();
     }
 
+
+    private void silenceStartupBeep() {
+        if (audioManager == null) return;
+        try {
+            audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+            mainHandler.postDelayed(() ->
+                            audioManager.adjustStreamVolume(
+                                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0),
+                    BEEP_MUTE_MS);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not duck stream for mic beep", e);
+        }
+    }
+
     private void beginSession() {
+        if (isListening) return; // guard against double-start races
 
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -101,7 +138,7 @@ public class SpeechManager {
         intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 1500);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 1500);
-
+        silenceStartupBeep();
         recognizer.startListening(intent);
         isListening = true;
         notifyMicStatus("Listening...");
@@ -184,8 +221,9 @@ public class SpeechManager {
         @Override public void onEvent(int eventType, Bundle params) { }
 
         private void restartIfNeeded() {
-            if (shouldRestart && !isMuted) beginSession();
+            if (shouldRestart && !isMuted) scheduleRestart();
         }
+
 
         private String describeError(int error) {
             switch (error) {

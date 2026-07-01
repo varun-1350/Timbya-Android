@@ -109,7 +109,7 @@ public class OverlayService extends Service {
 
             @Override
             public void onClose() {
-                controller.hide();
+                controller.setShrunk(true);
             }
         });
 

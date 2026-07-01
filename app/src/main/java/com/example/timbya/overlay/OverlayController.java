@@ -80,10 +80,9 @@ public class OverlayController {
     public void setReply(String text) { if (reply != null) reply.setText(text); }
 
     public void setMicActive(boolean active) {
-        if (mic == null) return;
-        mic.setColorFilter(
-                active ? Color.parseColor("#4DE5FF") : Color.parseColor("#808080"),
-                PorterDuff.Mode.SRC_IN);
+        int color = active ? Color.parseColor("#4DE5FF") : Color.parseColor("#B0B0B0");
+        if (mic != null) mic.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+        if (bubble != null) bubble.setColorFilter(color, PorterDuff.Mode.SRC_IN);
     }
 
     public void setShrunk(boolean shrunk) {
