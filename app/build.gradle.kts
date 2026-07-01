@@ -65,4 +65,9 @@ dependencies {
 
     // Gson
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // Room (long-term memory persistence)
+    implementation("androidx.room:room-runtime:2.6.1")
+    annotationProcessor("androidx.room:room-compiler:2.6.1")
+
 }

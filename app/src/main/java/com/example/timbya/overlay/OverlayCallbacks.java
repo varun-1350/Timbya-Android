@@ -1,5 +1,8 @@
 package com.example.timbya.overlay;
 
 public interface OverlayCallbacks {
-    void onMicPressed();
+    void onMicToggle();
+    void onShrinkToggle();
+    void onPowerOff();
+    void onClose();
 }

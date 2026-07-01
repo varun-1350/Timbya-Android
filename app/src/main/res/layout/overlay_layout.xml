@@ -1,65 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
 
-    android:layout_width="280dp"
-    android:layout_height="wrap_content"
+    <LinearLayout
+        android:id="@+id/panelContainer"
+        android:layout_width="280dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/bg_overlay"
+        android:elevation="20dp">
 
-    android:orientation="vertical"
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-    android:padding="16dp"
+            <TextView
+                android:id="@+id/title"
+                android:text="Timbya"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"/>
 
-    android:background="@drawable/bg_overlay"
+            <ImageButton
+                android:id="@+id/btnShrink"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Shrink"
+                android:src="@android:drawable/arrow_down_float"/>
 
-    android:elevation="20dp">
+            <ImageButton
+                android:id="@+id/btnClose"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Close"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"/>
+        </LinearLayout>
 
-    <TextView
-        android:id="@+id/title"
-        android:text="Timbya"
-        android:textStyle="bold"
-        android:textSize="20sp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+        <ImageButton
+            android:id="@+id/mic"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="8dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Mic toggle"
+            android:src="@android:drawable/ic_btn_speak_now"/>
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ready"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:layout_gravity="center"/>
+
+        <TextView
+            android:id="@+id/reply"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="15dp"
+            android:textColor="@color/white"
+            android:text=""/>
+
+        <ImageButton
+            android:id="@+id/btnPowerOff"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="8dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Power off"
+            android:src="@android:drawable/ic_lock_power_off"/>
+
+    </LinearLayout>
 
     <ImageButton
+        android:id="@+id/bubble"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_bubble"
+        android:contentDescription="Expand Timbya"
+        android:src="@android:drawable/ic_btn_speak_now"
+        android:visibility="gone"/>
 
-        android:id="@+id/mic"
-
-        android:layout_width="80dp"
-
-        android:layout_height="80dp"
-
-        android:layout_gravity="center"
-
-        android:background="@android:color/transparent"
-
-        android:src="@android:drawable/ic_btn_speak_now"/>
-
-    <TextView
-
-        android:id="@+id/status"
-
-        android:layout_width="wrap_content"
-
-        android:layout_height="wrap_content"
-
-        android:text="Ready"
-
-        android:textSize="16sp"
-
-        android:layout_gravity="center"/>
-
-    <TextView
-
-        android:id="@+id/reply"
-
-        android:layout_width="match_parent"
-
-        android:layout_height="wrap_content"
-
-        android:paddingTop="15dp"
-
-        android:text=""/>
-
-</LinearLayout>
+</FrameLayout>

@@ -15,13 +15,12 @@ public class GeminiManager {
 
     }
 
-    public void ask(
-            String prompt,
+    /** Send an already-built prompt (already includes memory context). */
+    public void askRaw(
+            String fullPrompt,
             Callback<GeminiResponse> callback){
 
-        GeminiRequest request =
-                new GeminiRequest(
-                        PromptManager.buildPrompt(prompt));
+        GeminiRequest request = new GeminiRequest(fullPrompt);
 
         repository.getApi()
                 .generateContent(

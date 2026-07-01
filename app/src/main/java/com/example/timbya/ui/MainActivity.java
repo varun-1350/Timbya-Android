@@ -21,6 +21,7 @@ import com.example.timbya.actions.ActionExecutor;
 import com.example.timbya.ai.GeminiManager;
 import com.example.timbya.core.TimbyaEngine;
 import com.example.timbya.core.TimbyaListener;
+import com.example.timbya.memory.MemoryManager;
 import com.example.timbya.services.OverlayService;
 import com.example.timbya.speech.Speaker;
 
@@ -173,9 +174,12 @@ public class MainActivity extends AppCompatActivity {
 
         ActionExecutor actionExecutor = new ActionExecutor(this);
 
+        MemoryManager memoryManager = new MemoryManager(this);
+
         engine = new TimbyaEngine(
                 actionExecutor,
-                geminiManager
+                geminiManager,
+                memoryManager
         );
 
     }

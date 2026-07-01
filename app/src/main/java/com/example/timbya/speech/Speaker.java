@@ -5,9 +5,18 @@ import android.speech.tts.TextToSpeech;
 
 import java.util.Locale;
 
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.speech.tts.TextToSpeech;
+
+import java.util.Locale;
+
 public class Speaker {
 
     private  TextToSpeech tts = null;
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public Speaker(Context context) {
 
@@ -41,11 +50,11 @@ public class Speaker {
             @Override public void onStart(String utteranceId) { }
 
             @Override public void onDone(String utteranceId) {
-                if (onDone != null) onDone.run();
+                if (onDone != null) mainHandler.post(onDone);
             }
 
             @Override public void onError(String utteranceId) {
-                if (onDone != null) onDone.run();
+                if (onDone != null) mainHandler.post(onDone);
             }
         });
 
@@ -83,5 +92,6 @@ public class Speaker {
         }
 
     }
+
 
 }

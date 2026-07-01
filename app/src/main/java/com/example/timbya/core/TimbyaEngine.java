@@ -3,6 +3,8 @@ package com.example.timbya.core;
 import com.example.timbya.actions.ActionExecutor;
 import com.example.timbya.actions.ActionResult;
 import com.example.timbya.ai.GeminiManager;
+import com.example.timbya.ai.PromptManager;
+import com.example.timbya.memory.MemoryManager;
 import com.example.timbya.model.GeminiResponse;
 
 import retrofit2.Call;
@@ -13,66 +15,51 @@ public class TimbyaEngine {
 
     private final ActionExecutor actionExecutor;
     private final GeminiManager geminiManager;
+    private final MemoryManager memoryManager;
 
     public TimbyaEngine(ActionExecutor executor,
-                        GeminiManager geminiManager) {
-
+                        GeminiManager geminiManager,
+                        MemoryManager memoryManager) {
         this.actionExecutor = executor;
         this.geminiManager = geminiManager;
-
+        this.memoryManager = memoryManager;
     }
 
-    public void process(String command,
-                        TimbyaListener listener) {
+    public void process(String command, TimbyaListener listener) {
 
         ActionResult result = actionExecutor.execute(command);
 
         if (result.isHandled()) {
-
             listener.onReply(result.getReply());
             return;
-
         }
 
-        geminiManager.ask(command, new Callback<GeminiResponse>() {
+        memoryManager.getRelevantMemories(command, memoryContext -> {
 
-            @Override
-            public void onResponse(Call<GeminiResponse> call,
-                                   Response<GeminiResponse> response) {
+            String prompt = PromptManager.buildPrompt(command, memoryContext);
 
-                if(response.isSuccessful()
-                        && response.body()!=null
-                        && response.body().candidates!=null
-                        && !response.body().candidates.isEmpty()){
+            geminiManager.askRaw(prompt, new Callback<GeminiResponse>() {
 
-                    String reply = response.body()
-                            .candidates
-                            .get(0)
-                            .content
-                            .parts
-                            .get(0)
-                            .text;
+                @Override
+                public void onResponse(Call<GeminiResponse> call, Response<GeminiResponse> response) {
+                    if (response.isSuccessful() && response.body() != null
+                            && response.body().candidates != null
+                            && !response.body().candidates.isEmpty()) {
 
-                    listener.onReply(reply);
+                        String reply = response.body().candidates.get(0).content.parts.get(0).text;
+                        listener.onReply(reply);
+                        memoryManager.extractAndStore(command, reply);
 
-                }else{
-
-                    listener.onError("No response from Gemini.");
-
+                    } else {
+                        listener.onError("No response from Gemini.");
+                    }
                 }
 
-            }
-
-            @Override
-            public void onFailure(Call<GeminiResponse> call,
-                                  Throwable t) {
-
-                listener.onError(t.getMessage());
-
-            }
-
+                @Override
+                public void onFailure(Call<GeminiResponse> call, Throwable t) {
+                    listener.onError(t.getMessage());
+                }
+            });
         });
-
     }
-
 }
