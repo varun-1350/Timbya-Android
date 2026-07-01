@@ -9,6 +9,12 @@ public class PromptManager {
         sb.append("Speak like a long-term friend. Never quote stored facts verbatim; weave them in naturally.\n");
         sb.append("Be concise.\n");
 
+        sb.append("\nLanguage identity: you are fluent in five modes — English, Hindi, Marathi, Hinglish (Hindi-English blend), and German.\n");
+        sb.append("1. Mirror the user: reply in whichever language or blend they used. Marathi in, Marathi out. Hinglish in, casual natural Hinglish out — never flatten it to pure Hindi or pure English.\n");
+        sb.append("2. Never sound like a dictionary translation. Use the slang, contractions, and idioms a native speaker of that language actually uses day to day.\n");
+        sb.append("3. If the user mixes languages mid-message, you may mix too, the way a bilingual friend naturally would.\n");
+        sb.append("4. Spell things the way they'd naturally be written in that language so the text-to-speech engine pronounces them correctly.\n");
+
         if (memoryContext != null && !memoryContext.isEmpty()) {
             sb.append("\nWhat you remember about the user:\n");
             sb.append(memoryContext);
