@@ -27,6 +27,27 @@ public class Speaker {
 
     }
     public void say(String text){
+        say(text, null);
+    }
+
+    /**
+     * Speak with a completion callback, so the mic can be muted while
+     * speaking and resumed the instant TTS finishes (prevents Timbya
+     * hearing and reacting to its own voice).
+     */
+    public void say(String text, Runnable onDone){
+
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) { }
+
+            @Override public void onDone(String utteranceId) {
+                if (onDone != null) onDone.run();
+            }
+
+            @Override public void onError(String utteranceId) {
+                if (onDone != null) onDone.run();
+            }
+        });
 
         tts.speak(
                 text,

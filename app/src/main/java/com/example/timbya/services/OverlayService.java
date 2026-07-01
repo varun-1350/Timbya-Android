@@ -13,12 +13,19 @@ import com.example.timbya.core.TimbyaListener;
 import com.example.timbya.overlay.OverlayCallbacks;
 import com.example.timbya.overlay.OverlayController;
 import com.example.timbya.speech.Speaker;
+import com.example.timbya.speech.SpeechManager;
+import com.example.timbya.speech.SpeechListener;
+import android.util.Log;
 
 public class OverlayService extends Service {
+
+    private static final String TAG = "TIMBYA_OVERLAY";
 
     private OverlayController controller;
 
     private Speaker speaker;
+
+    private SpeechManager speechManager;
 
     private TimbyaEngine engine;
 
@@ -28,6 +35,7 @@ public class OverlayService extends Service {
         super.onCreate();
 
         speaker = new Speaker(this);
+        speechManager = new SpeechManager(this);
 
         GeminiManager geminiManager =
                 new GeminiManager();
@@ -49,12 +57,35 @@ public class OverlayService extends Service {
 
                         controller.setStatus("Listening...");
 
-                        /*
-                         Stage 8.1
+                        speechManager.startListening(new SpeechListener() {
 
-                         SpeechManager.startListening()
+                            @Override
+                            public void onSpeechResult(String text) {
+                                OverlayService.this.onSpeechResult(text);
+                            }
 
-                         */
+                            @Override
+                            public void onSpeechError(String error) {
+                                Log.e(TAG, "Speech error: " + error);
+                                controller.setStatus("Ready");
+                            }
+
+                            @Override
+                            public void onMicStatus(String status) {
+                                Log.d(TAG, "Mic status: " + status);
+                            }
+
+                            @Override
+                            public void onSpeechDetected() {
+                                controller.setStatus("Listening (speech detected)...");
+                            }
+
+                            @Override
+                            public void onPartialResult(String partialText) {
+                                controller.setReply(partialText);
+                            }
+
+                        });
 
                     }
 
@@ -80,9 +111,12 @@ public class OverlayService extends Service {
 
                         controller.setStatus("Speaking...");
 
-                        speaker.say(reply);
+                        speechManager.mute();
 
-                        controller.setStatus("Ready");
+                        speaker.say(reply, () -> {
+                            controller.setStatus("Ready");
+                            speechManager.resume();
+                        });
 
                     }
 
@@ -113,6 +147,8 @@ public class OverlayService extends Service {
         controller.hide();
 
         speaker.shutdown();
+
+        speechManager.destroy();
 
         super.onDestroy();
 

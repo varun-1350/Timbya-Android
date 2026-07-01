@@ -3,7 +3,9 @@ package com.example.timbya.ui;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.RecognizerIntent;
 import android.widget.Button;
 import android.widget.TextView;
@@ -41,12 +43,32 @@ public class MainActivity extends AppCompatActivity {
                     new ActivityResultContracts.RequestPermission(),
                     isGranted -> {
                         if (isGranted) {
-                            startSpeechRecognition();
+                            startService(new Intent(this, OverlayService.class));
                         } else {
                             Toast.makeText(
                                     this,
                                     "Microphone permission denied",
                                     Toast.LENGTH_SHORT
+                            ).show();
+                        }
+                    });
+
+    /*
+     * Result of asking the user to enable "Display over other apps".
+     * This screen doesn't return a reliable result code, so we re-check
+     * Settings.canDrawOverlays() when the user comes back to MainActivity.
+     */
+    private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (Settings.canDrawOverlays(this)) {
+                            checkAudioPermissionAndStart();
+                        } else {
+                            Toast.makeText(
+                                    this,
+                                    "Timbya needs the \"display over other apps\" permission to show its overlay",
+                                    Toast.LENGTH_LONG
                             ).show();
                         }
                     });
@@ -110,14 +132,20 @@ public class MainActivity extends AppCompatActivity {
 
         initializeEngine();
 
-        btnSpeak.setOnClickListener(v -> checkPermissionAndSpeak());
-        btnSpeak.setOnClickListener(v->{
+        btnSpeak.setOnClickListener(v -> {
 
-            startService(
-                    new Intent(
-                            this,
-                            OverlayService.class
-                    ));
+            if (!Settings.canDrawOverlays(this)) {
+
+                Intent intent = new Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+
+                overlayPermissionLauncher.launch(intent);
+
+                return;
+            }
+
+            checkAudioPermissionAndStart();
 
         });
 
@@ -151,6 +179,30 @@ public class MainActivity extends AppCompatActivity {
         );
 
     }
+    /*
+     * Gate on RECORD_AUDIO, then finally start the overlay service.
+     * Only reached once overlay permission is already confirmed.
+     */
+    private void checkAudioPermissionAndStart() {
+
+        if (ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED) {
+
+            startService(new Intent(this, OverlayService.class));
+
+        } else {
+
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+
+        }
+
+    }
+
+    /*
+     * Check Microphone Permission
+     */
+
 
     /*
      * Check Microphone Permission

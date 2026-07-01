@@ -6,4 +6,13 @@ public interface SpeechListener {
 
     void onSpeechError(String error);
 
+    // --- Diagnostics: Voice Debugging Priority ---
+
+    default void onMicStatus(String status) { }
+
+    default void onSpeechDetected() { }
+
+    default void onAudioLevel(float rmsdB) { }
+
+    default void onPartialResult(String partialText) { }
 }
