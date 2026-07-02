@@ -28,6 +28,13 @@ import com.example.timbya.speech.Speaker;
 import java.util.ArrayList;
 import java.util.Locale;
 
+/**
+ * Trampoline activity: checks permissions, starts/shows OverlayService,
+ * then finishes immediately with no transition animation. Requires
+ * android:theme="@style/Theme.Timbya.Launcher" on this activity in the
+ * manifest (translucent, windowAnimationStyle=@null) so nothing ever
+ * visibly flashes on screen during launch.
+ */
 public class MainActivity extends AppCompatActivity {
 
     private TextView txtSpeech;
@@ -44,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
                     new ActivityResultContracts.RequestPermission(),
                     isGranted -> {
                         if (isGranted) {
-                            startService(new Intent(this, OverlayService.class));
+                            launchOverlayAndFinish();
                         } else {
                             Toast.makeText(
                                     this,
@@ -75,7 +82,8 @@ public class MainActivity extends AppCompatActivity {
                     });
 
     /*
-     * Speech Result
+     * Speech Result (legacy one-shot dictation path, kept for compatibility —
+     * not part of the main overlay launch flow)
      */
     private final ActivityResultLauncher<Intent> speechLauncher =
             registerForActivityResult(
@@ -95,29 +103,23 @@ public class MainActivity extends AppCompatActivity {
 
                         String text = speech.get(0);
 
-                        txtSpeech.setText(text);
+                        if (txtSpeech != null) txtSpeech.setText(text);
 
                         engine.process(text, new TimbyaListener() {
 
                             @Override
                             public void onReply(String reply) {
-
                                 runOnUiThread(() -> {
-
-                                    txtSpeech.setText(reply);
-
+                                    if (txtSpeech != null) txtSpeech.setText(reply);
                                     speaker.say(reply);
-
                                 });
-
                             }
 
                             @Override
                             public void onError(String error) {
-
-                                runOnUiThread(() ->
-                                        txtSpeech.setText(error));
-
+                                runOnUiThread(() -> {
+                                    if (txtSpeech != null) txtSpeech.setText(error);
+                                });
                             }
 
                         });
@@ -130,50 +132,43 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         initializeViews();
-
         initializeEngine();
 
-        btnSpeak.setOnClickListener(v -> {
+        // Seamless launch: go straight for the overlay without waiting for
+        // a button tap. The button stays wired below as a manual fallback
+        // in case this activity is ever reopened directly.
+        proceedToOverlay();
 
-            if (!Settings.canDrawOverlays(this)) {
+        btnSpeak.setOnClickListener(v -> proceedToOverlay());
+    }
 
-                Intent intent = new Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-
-                overlayPermissionLauncher.launch(intent);
-
-                return;
-            }
-
-            checkAudioPermissionAndStart();
-
-        });
-
+    private void proceedToOverlay() {
+        if (!Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            overlayPermissionLauncher.launch(intent);
+            return;
+        }
+        checkAudioPermissionAndStart();
     }
 
     /*
      * Find Views
      */
     private void initializeViews() {
-
         txtSpeech = findViewById(R.id.txtSpeech);
-
         btnSpeak = findViewById(R.id.btnSpeak);
-
     }
 
     /*
      * Initialize Timbya
      */
     private void initializeEngine() {
-
         speaker = new Speaker(this);
 
         GeminiManager geminiManager = new GeminiManager();
-
         ActionExecutor actionExecutor = new ActionExecutor(this);
-
         MemoryManager memoryManager = new MemoryManager(this);
 
         engine = new TimbyaEngine(
@@ -181,86 +176,41 @@ public class MainActivity extends AppCompatActivity {
                 geminiManager,
                 memoryManager
         );
-
     }
+
     /*
-     * Gate on RECORD_AUDIO, then finally start the overlay service.
+     * Gate on RECORD_AUDIO, then finally start/show the overlay service.
      * Only reached once overlay permission is already confirmed.
      */
     private void checkAudioPermissionAndStart() {
-
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
 
-            startService(new Intent(this, OverlayService.class));
+            launchOverlayAndFinish();
 
         } else {
-
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
-
         }
-
     }
 
-    /*
-     * Check Microphone Permission
+    /**
+     * Starts (or re-shows, if already running) the overlay service, then
+     * closes this activity with no transition — MainActivity is a
+     * trampoline, never a screen the user is meant to see.
      */
+    private void launchOverlayAndFinish() {
+        Intent intent = new Intent(this, OverlayService.class);
+        intent.setAction(OverlayService.ACTION_SHOW);
+        startService(intent);
 
-
-    /*
-     * Check Microphone Permission
-     */
-    private void checkPermissionAndSpeak() {
-
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO)
-                == PackageManager.PERMISSION_GRANTED) {
-
-            startSpeechRecognition();
-
-        } else {
-
-            permissionLauncher.launch(
-                    Manifest.permission.RECORD_AUDIO);
-
-        }
-
-    }
-
-    /*
-     * Start Speech Recognition
-     */
-    private void startSpeechRecognition() {
-
-        Intent intent =
-                new Intent(
-                        RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-
-        intent.putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-
-        intent.putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE,
-                Locale.getDefault());
-
-        intent.putExtra(
-                RecognizerIntent.EXTRA_PROMPT,
-                "Speak to Timbya");
-
-        speechLauncher.launch(intent);
-
+        finish();
+        overridePendingTransition(0, 0);
     }
 
     @Override
     protected void onDestroy() {
-
         super.onDestroy();
-
-        speaker.shutdown();
-
+        if (speaker != null) speaker.shutdown();
     }
-
 }

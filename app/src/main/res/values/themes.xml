@@ -6,4 +6,11 @@
     </style>
 
     <style name="Theme.Timbya" parent="Base.Theme.Timbya" />
+    <style name="Theme.Timbya.Launcher" parent="Theme.Timbya">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

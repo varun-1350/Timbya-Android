@@ -1,5 +1,9 @@
 package com.example.timbya.services;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Handler;
@@ -8,7 +12,9 @@ import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
 
+import com.example.timbya.R;
 import com.example.timbya.actions.ActionExecutor;
 import com.example.timbya.ai.GeminiManager;
 import com.example.timbya.core.TimbyaEngine;
@@ -20,11 +26,17 @@ import com.example.timbya.overlay.OverlayController;
 import com.example.timbya.speech.Speaker;
 import com.example.timbya.speech.SpeechListener;
 import com.example.timbya.speech.SpeechManager;
+import com.example.timbya.ui.MainActivity;
 
 public class OverlayService extends Service {
 
     private static final String TAG = "TIMBYA_OVERLAY";
     private static final long SPEAKING_WATCHDOG_MS = 10_000L;
+
+    public static final String ACTION_SHOW = "com.example.timbya.action.SHOW_OVERLAY";
+
+    private static final String NOTIFICATION_CHANNEL_ID = "timbya_listening";
+    private static final int NOTIFICATION_ID = 1001;
 
     private OverlayController controller;
     private Speaker speaker;
@@ -35,10 +47,18 @@ public class OverlayService extends Service {
     private TimbyaState state = TimbyaState.IDLE;
     private Runnable speakingWatchdog;
     private SpeechListener speechListener;
+    private boolean resumeHandled = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
+
+        // MUST happen before anything touches the microphone: a background
+        // process (no visible Activity) is denied mic/audio-focus access on
+        // Android 9+. Promoting to a foreground service with a persistent
+        // notification is what makes SpeechManager's requestAudioFocus()
+        // actually succeed instead of looping forever.
+        startForeground(NOTIFICATION_ID, buildNotification());
 
         speaker = new Speaker(this);
         speechManager = new SpeechManager(this);
@@ -109,7 +129,7 @@ public class OverlayService extends Service {
 
             @Override
             public void onClose() {
-                controller.setShrunk(true);
+                controller.hide();
             }
         });
 
@@ -119,8 +139,17 @@ public class OverlayService extends Service {
         speechManager.startListening(speechListener);
     }
 
-    public void onSpeechResult(String text){
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_SHOW.equals(intent.getAction())) {
+            controller.show();
+        }
+        return START_STICKY;
+    }
 
+    public void onSpeechResult(String text) {
+
+        resumeHandled = false;
         cancelSpeakingWatchdog();
         setState(TimbyaState.PROCESSING);
 
@@ -134,11 +163,7 @@ public class OverlayService extends Service {
                 speechManager.mute();
                 armSpeakingWatchdog();
 
-                speaker.say(reply, () -> {
-                    cancelSpeakingWatchdog();
-                    setState(TimbyaState.LISTENING);
-                    speechManager.resume();
-                });
+                speaker.say(reply, () -> resumeOnce("tts-done"));
             }
 
             @Override
@@ -147,6 +172,17 @@ public class OverlayService extends Service {
                 setState(TimbyaState.LISTENING);
             }
         });
+    }
+
+    private void resumeOnce(String source) {
+        if (resumeHandled) {
+            Log.d(TAG, "resume already handled this turn, ignoring: " + source);
+            return;
+        }
+        resumeHandled = true;
+        cancelSpeakingWatchdog();
+        setState(TimbyaState.LISTENING);
+        speechManager.resume();
     }
 
     private void setState(TimbyaState newState) {
@@ -162,8 +198,7 @@ public class OverlayService extends Service {
             if (state == TimbyaState.SPEAKING) {
                 Log.e(TAG, "WATCHDOG: stuck in SPEAKING, forcing reset to LISTENING");
                 speaker.stop();
-                setState(TimbyaState.LISTENING);
-                speechManager.resume();
+                resumeOnce("watchdog");
             }
         };
         mainHandler.postDelayed(speakingWatchdog, SPEAKING_WATCHDOG_MS);
@@ -176,6 +211,30 @@ public class OverlayService extends Service {
         }
     }
 
+    private Notification buildNotification() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        NotificationChannel channel = new NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "Timbya listening",
+                NotificationManager.IMPORTANCE_LOW); // low = no sound/heads-up, just persistent icon
+        channel.setDescription("Timbya is running and ready to listen");
+        if (nm != null) nm.createNotificationChannel(channel);
+
+        Intent tapIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                this, 0, tapIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        return new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                .setContentTitle("Timbya")
+                .setContentText("Listening in the background")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+    }
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) { return null; }
@@ -186,6 +245,7 @@ public class OverlayService extends Service {
         controller.hide();
         speaker.shutdown();
         speechManager.destroy();
+        stopForeground(true);
         super.onDestroy();
     }
 }

@@ -22,15 +22,24 @@ import java.util.Locale;
  *
  * IMPORTANT: a fresh SpeechRecognizer is created for every turn instead of
  * reusing one instance across cancel()/startListening() cycles. Reusing a
- * single instance is what was corrupting the client state and throwing
+ * single instance is what corrupts the client state and throws
  * ERROR_CLIENT (5) starting on turn 2 — this is a known Android quirk, not
  * a bug in the calling code. destroy()+recreate per session avoids it.
+ *
+ * All entry points are guarded to run on the main thread, since
+ * SpeechRecognizer is bound to the Looper that creates it.
  */
 public class SpeechManager {
 
     private static final String TAG = "TIMBYA_VOICE";
     private static final long RESTART_DELAY_MS = 350;
     private static final long BEEP_MUTE_MS = 700;
+
+    private static final int[] BEEP_STREAMS = {
+            AudioManager.STREAM_MUSIC,
+            AudioManager.STREAM_NOTIFICATION,
+            AudioManager.STREAM_SYSTEM
+    };
 
     private final Context appContext;
     private final AudioManager audioManager;
@@ -91,7 +100,7 @@ public class SpeechManager {
         notifyMicStatus("Mic muted (speaking)");
     }
 
-    /** Called from Speaker's onDone (already posted to main thread). */
+    /** Called once per turn when it's time to start listening again. */
     public void resume() {
         isMuted = false;
         if (shouldRestart) scheduleRestart();
@@ -116,7 +125,7 @@ public class SpeechManager {
 
     /** Creates a brand-new SpeechRecognizer for this turn. Must run on the
      *  main thread — SpeechRecognizer is bound to the Looper that creates
-     *  it, and calling it off that thread is a separate common cause of
+     *  it; calling it off that thread is a separate common cause of
      *  ERROR_CLIENT. */
     private void beginSession() {
         if (isListening) return;
@@ -136,6 +145,7 @@ public class SpeechManager {
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 1500);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 1500);
@@ -192,18 +202,25 @@ public class SpeechManager {
         }
     }
 
+    /** Best-effort duck of the streams the recognizer beep is commonly
+     *  routed on (varies by OEM/Android version). Full removal isn't
+     *  possible from app code — this is the least-intrusive available fix. */
     private void silenceStartupBeep() {
         if (audioManager == null) return;
-        try {
-            audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
-            mainHandler.postDelayed(() ->
-                            audioManager.adjustStreamVolume(
-                                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0),
-                    BEEP_MUTE_MS);
-        } catch (Exception e) {
-            Log.w(TAG, "Could not duck stream for mic beep", e);
+        for (int stream : BEEP_STREAMS) {
+            try {
+                audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0);
+            } catch (Exception e) {
+                Log.w(TAG, "Could not mute stream " + stream + " for mic beep", e);
+            }
         }
+        mainHandler.postDelayed(() -> {
+            for (int stream : BEEP_STREAMS) {
+                try {
+                    audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0);
+                } catch (Exception ignored) { }
+            }
+        }, BEEP_MUTE_MS);
     }
 
     private void notifyMicStatus(String status) {
