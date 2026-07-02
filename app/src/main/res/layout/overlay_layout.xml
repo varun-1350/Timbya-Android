@@ -6,10 +6,10 @@
 
     <LinearLayout
         android:id="@+id/panelContainer"
-        android:layout_width="280dp"
+        android:layout_width="@dimen/overlay_panel_width"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="@dimen/overlay_panel_padding"
         android:background="@drawable/bg_overlay"
         android:elevation="20dp">
 
@@ -24,23 +24,23 @@
                 android:text="Timbya"
                 android:textColor="@color/white"
                 android:textStyle="bold"
-                android:textSize="20sp"
+                android:textSize="@dimen/overlay_title_text_size"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"/>
 
             <ImageButton
                 android:id="@+id/btnShrink"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="@dimen/overlay_icon_button_size"
+                android:layout_height="@dimen/overlay_icon_button_size"
                 android:background="@drawable/bg_icon_chip"
                 android:contentDescription="Shrink"
                 android:src="@android:drawable/arrow_down_float"/>
 
             <ImageButton
                 android:id="@+id/btnClose"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="@dimen/overlay_icon_button_size"
+                android:layout_height="@dimen/overlay_icon_button_size"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/bg_icon_chip"
                 android:contentDescription="Close"
@@ -49,10 +49,10 @@
 
         <ImageButton
             android:id="@+id/mic"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
+            android:layout_width="@dimen/overlay_mic_size"
+            android:layout_height="@dimen/overlay_mic_size"
             android:layout_gravity="center"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/overlay_mic_margin_top"
             android:background="@drawable/bg_icon_chip"
             android:contentDescription="Mic toggle"
             android:src="@android:drawable/ic_btn_speak_now"/>
@@ -63,23 +63,24 @@
             android:layout_height="wrap_content"
             android:text="Ready"
             android:textColor="@color/white"
-            android:textSize="16sp"
+            android:textSize="@dimen/overlay_status_text_size"
             android:layout_gravity="center"/>
 
         <TextView
             android:id="@+id/reply"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="15dp"
+            android:paddingTop="@dimen/overlay_reply_padding_top"
             android:textColor="@color/white"
+            android:textSize="@dimen/overlay_reply_text_size"
             android:text=""/>
 
         <ImageButton
             android:id="@+id/btnPowerOff"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="@dimen/overlay_power_button_size"
+            android:layout_height="@dimen/overlay_power_button_size"
             android:layout_gravity="end"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/overlay_power_margin_top"
             android:background="@drawable/bg_icon_chip"
             android:contentDescription="Power off"
             android:src="@android:drawable/ic_lock_power_off"/>
@@ -88,8 +89,8 @@
 
     <ImageButton
         android:id="@+id/bubble"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="@dimen/overlay_bubble_size"
+        android:layout_height="@dimen/overlay_bubble_size"
         android:background="@drawable/bg_bubble"
         android:contentDescription="Expand Timbya"
         android:src="@android:drawable/ic_btn_speak_now"

@@ -27,6 +27,7 @@ import com.example.timbya.speech.Speaker;
 import com.example.timbya.speech.SpeechListener;
 import com.example.timbya.speech.SpeechManager;
 import com.example.timbya.ui.MainActivity;
+import com.example.timbya.utils.Constants;
 
 public class OverlayService extends Service {
 
@@ -84,7 +85,9 @@ public class OverlayService extends Service {
                 }
             }
             @Override public void onPartialResult(String partialText) {
-                controller.setReply(partialText);
+                if (Constants.SHOW_DEBUG_TEXT) {
+                    controller.setReply(partialText);
+                }
             }
         };
 
@@ -130,6 +133,7 @@ public class OverlayService extends Service {
             @Override
             public void onClose() {
                 controller.hide();
+                stopSelf();
             }
         });
 
@@ -188,7 +192,16 @@ public class OverlayService extends Service {
     private void setState(TimbyaState newState) {
         state = newState;
         Log.d(TAG, "STATE -> " + newState);
-        controller.setStatus(newState.label());
+
+        String label = newState.label();
+        if (newState == TimbyaState.LISTENING && !Constants.SHOW_LISTENING_LABEL) {
+            label = "";
+        }
+        if (newState == TimbyaState.PROCESSING && !Constants.SHOW_AI_STATE) {
+            label = "";
+        }
+
+        controller.setStatus(label);
         controller.setMicActive(newState == TimbyaState.LISTENING);
     }
 

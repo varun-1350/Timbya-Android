@@ -1,19 +1,27 @@
 package com.example.timbya.overlay;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
 import com.example.timbya.R;
+import com.example.timbya.utils.Constants;
 
 public class OverlayController {
+
+    private static final int CORNER_MARGIN_DP = 16;
+    private static final int TOUCH_SLOP_PX = 16;
 
     private final Context context;
     private final WindowManager windowManager;
@@ -33,6 +41,16 @@ public class OverlayController {
     private ImageButton btnPowerOff;
 
     private boolean shrunk = false;
+
+    // Last known / default shrunk-bubble corner position, in TOP|START
+    // window coordinates. Integer.MIN_VALUE means "not set yet".
+    private int bubbleX = Integer.MIN_VALUE;
+    private int bubbleY = Integer.MIN_VALUE;
+
+    // drag state
+    private float touchStartRawX, touchStartRawY;
+    private int paramsStartX, paramsStartY;
+    private boolean isDragging = false;
 
     public OverlayController(Context context, OverlayCallbacks callbacks) {
         this.context = context;
@@ -59,9 +77,10 @@ public class OverlayController {
 
         mic.setOnClickListener(v -> { if (callbacks != null) callbacks.onMicToggle(); });
         btnShrink.setOnClickListener(v -> { if (callbacks != null) callbacks.onShrinkToggle(); });
-        bubble.setOnClickListener(v -> { if (callbacks != null) callbacks.onShrinkToggle(); });
         btnClose.setOnClickListener(v -> { if (callbacks != null) callbacks.onClose(); });
         btnPowerOff.setOnClickListener(v -> { if (callbacks != null) callbacks.onPowerOff(); });
+
+        bubble.setOnTouchListener(this::onBubbleTouch);
 
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -75,7 +94,97 @@ public class OverlayController {
         windowManager.addView(overlayView, params);
     }
 
-    public void setStatus(String text) { if (status != null) status.setText(text); }
+    private boolean onBubbleTouch(View v, MotionEvent event) {
+        switch (event.getActionMasked()) {
+
+            case MotionEvent.ACTION_DOWN:
+                touchStartRawX = event.getRawX();
+                touchStartRawY = event.getRawY();
+                paramsStartX = params.x;
+                paramsStartY = params.y;
+                isDragging = false;
+                return true;
+
+            case MotionEvent.ACTION_MOVE: {
+                float dx = event.getRawX() - touchStartRawX;
+                float dy = event.getRawY() - touchStartRawY;
+                if (!isDragging && (Math.abs(dx) > TOUCH_SLOP_PX || Math.abs(dy) > TOUCH_SLOP_PX)) {
+                    isDragging = true;
+                }
+                if (isDragging) {
+                    params.x = paramsStartX + (int) dx;
+                    params.y = paramsStartY + (int) dy;
+                    windowManager.updateViewLayout(overlayView, params);
+                }
+                return true;
+            }
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (isDragging) {
+                    snapToNearestCorner();
+                } else if (callbacks != null) {
+                    callbacks.onShrinkToggle(); // plain tap = expand
+                }
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /** Only reachable while shrunk (bubble is the only visible/draggable
+     *  view), so gravity is always TOP|START by the time this runs. */
+    private void snapToNearestCorner() {
+        if (overlayView == null || params == null) return;
+
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        int screenWidth = metrics.widthPixels;
+        int screenHeight = metrics.heightPixels;
+        int margin = dpToPx(CORNER_MARGIN_DP);
+        int bubbleSize = bubble.getWidth() > 0 ? bubble.getWidth() : dpToPx(32);
+
+        boolean left = (params.x + bubbleSize / 2f) < screenWidth / 2f;
+        boolean top = (params.y + bubbleSize / 2f) < screenHeight / 2f;
+
+        int targetX = left ? margin : screenWidth - bubbleSize - margin;
+        int targetY = top ? margin : screenHeight - bubbleSize - margin;
+
+        bubbleX = targetX;
+        bubbleY = targetY;
+
+        animateTo(targetX, targetY);
+    }
+
+    private void animateTo(int targetX, int targetY) {
+        final int startX = params.x;
+        final int startY = params.y;
+
+        ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration(220);
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.addUpdateListener(animation -> {
+            float fraction = (float) animation.getAnimatedValue();
+            params.x = (int) (startX + (targetX - startX) * fraction);
+            params.y = (int) (startY + (targetY - startY) * fraction);
+            if (overlayView != null) windowManager.updateViewLayout(overlayView, params);
+        });
+        animator.start();
+    }
+
+    private int dpToPx(int dp) {
+        return (int) (dp * context.getResources().getDisplayMetrics().density);
+    }
+
+    public void setStatus(String text) {
+        if (status == null) return;
+        if (!Constants.SHOW_STATUS_TEXT || text == null || text.isEmpty()) {
+            status.setVisibility(View.GONE);
+            return;
+        }
+        status.setVisibility(View.VISIBLE);
+        status.setText(text);
+    }
 
     public void setReply(String text) { if (reply != null) reply.setText(text); }
 
@@ -87,12 +196,32 @@ public class OverlayController {
 
     public void setShrunk(boolean shrunk) {
         this.shrunk = shrunk;
-        if (panelContainer == null || bubble == null) return;
+        if (panelContainer == null || bubble == null || overlayView == null || params == null) return;
+
         panelContainer.setVisibility(shrunk ? View.GONE : View.VISIBLE);
         bubble.setVisibility(shrunk ? View.VISIBLE : View.GONE);
-        if (overlayView != null && params != null) {
-            windowManager.updateViewLayout(overlayView, params);
+
+        if (shrunk) {
+            params.gravity = Gravity.TOP | Gravity.START;
+            if (bubbleX == Integer.MIN_VALUE) {
+                // first time shrinking this session: default to bottom-right
+                DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+                int margin = dpToPx(CORNER_MARGIN_DP);
+                int bubbleSize = dpToPx(32);
+                bubbleX = metrics.widthPixels - bubbleSize - margin;
+                bubbleY = metrics.heightPixels - bubbleSize - margin;
+            }
+            params.x = bubbleX;
+            params.y = bubbleY;
+        } else {
+            // expanded panel always returns to its fixed default position,
+            // independent of wherever the bubble was last dragged
+            params.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+            params.x = 0;
+            params.y = 0;
         }
+
+        windowManager.updateViewLayout(overlayView, params);
     }
 
     public boolean isShrunk() { return shrunk; }
