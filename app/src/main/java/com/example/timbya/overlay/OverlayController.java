@@ -42,10 +42,17 @@ public class OverlayController {
 
     private boolean shrunk = false;
 
+
     // Last known / default shrunk-bubble corner position, in TOP|START
     // window coordinates. Integer.MIN_VALUE means "not set yet".
     private int bubbleX = Integer.MIN_VALUE;
     private int bubbleY = Integer.MIN_VALUE;
+    private static final String PREFS_NAME  = "timbya_overlay_prefs";
+    private static final String PREF_CORNER = "corner";      // 0=TR 1=TL 2=BR 3=BL
+    private static final int    CORNER_TR   = 0;
+    private static final int    CORNER_TL   = 1;
+    private static final int    CORNER_BR   = 2;
+    private static final int    CORNER_BL   = 3;
 
     // drag state
     private float touchStartRawX, touchStartRawY;
@@ -139,19 +146,25 @@ public class OverlayController {
         if (overlayView == null || params == null) return;
 
         DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-        int screenWidth = metrics.widthPixels;
+        int screenWidth  = metrics.widthPixels;
         int screenHeight = metrics.heightPixels;
-        int margin = dpToPx(CORNER_MARGIN_DP);
-        int bubbleSize = bubble.getWidth() > 0 ? bubble.getWidth() : dpToPx(32);
+        int margin       = dpToPx(CORNER_MARGIN_DP);
+        int bubbleSize   = bubble.getWidth() > 0 ? bubble.getWidth() : dpToPx(32);
 
         boolean left = (params.x + bubbleSize / 2f) < screenWidth / 2f;
-        boolean top = (params.y + bubbleSize / 2f) < screenHeight / 2f;
+        boolean top  = (params.y + bubbleSize / 2f) < screenHeight / 2f;
 
-        int targetX = left ? margin : screenWidth - bubbleSize - margin;
-        int targetY = top ? margin : screenHeight - bubbleSize - margin;
+        int targetX = left ? margin : screenWidth  - bubbleSize - margin;
+        int targetY = top  ? margin : screenHeight - bubbleSize - margin;
 
         bubbleX = targetX;
         bubbleY = targetY;
+
+        // Persist the corner so the next service start restores it
+        int corner = top  ? (left ? CORNER_TL : CORNER_TR)
+                : (left ? CORNER_BL : CORNER_BR);
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putInt(PREF_CORNER, corner).apply();
 
         animateTo(targetX, targetY);
     }
@@ -204,19 +217,49 @@ public class OverlayController {
         if (shrunk) {
             params.gravity = Gravity.TOP | Gravity.START;
             if (bubbleX == Integer.MIN_VALUE) {
-                // first time shrinking this session: default to bottom-right
+                // No position set this session — load saved corner, or default to TOP RIGHT
                 DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-                int margin = dpToPx(CORNER_MARGIN_DP);
-                int bubbleSize = dpToPx(32);
-                bubbleX = metrics.widthPixels - bubbleSize - margin;
-                bubbleY = metrics.heightPixels - bubbleSize - margin;
+                int margin     = dpToPx(CORNER_MARGIN_DP);
+                int bubbleSize = dpToPx(56); // matches overlay_bubble_size
+                int savedCorner = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .getInt(PREF_CORNER, CORNER_TR); // first install → Top Right
+
+                switch (savedCorner) {
+                    case CORNER_TL:
+                        bubbleX = margin;
+                        bubbleY = margin;
+                        break;
+                    case CORNER_BR:
+                        bubbleX = metrics.widthPixels  - bubbleSize - margin;
+                        bubbleY = metrics.heightPixels - bubbleSize - margin;
+                        break;
+                    case CORNER_BL:
+                        bubbleX = margin;
+                        bubbleY = metrics.heightPixels - bubbleSize - margin;
+                        break;
+                    case CORNER_TR:
+                    default:
+                        bubbleX = metrics.widthPixels - bubbleSize - margin;
+                        bubbleY = margin;
+                        break;
+                }
             }
             params.x = bubbleX;
             params.y = bubbleY;
         } else {
-            // expanded panel always returns to its fixed default position,
-            // independent of wherever the bubble was last dragged
-            params.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+            // Anchor the expanded panel to the same corner as the bubble.
+            // We know which corner from bubbleX/bubbleY, so derive gravity flags
+            // and let the panel grow inward from that edge.
+            DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+            boolean onLeft = bubbleX < metrics.widthPixels / 2;
+            boolean onTop  = bubbleY < metrics.heightPixels / 2;
+
+            int hGravity = onLeft  ? Gravity.START : Gravity.END;
+            int vGravity = onTop   ? Gravity.TOP   : Gravity.BOTTOM;
+            params.gravity = hGravity | vGravity;
+
+            // Keep the panel edge flush with the screen edge (no offset needed —
+            // WRAP_CONTENT + END/START/TOP/BOTTOM gravity does the right thing).
             params.x = 0;
             params.y = 0;
         }

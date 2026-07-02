@@ -138,9 +138,8 @@ public class OverlayService extends Service {
         });
 
         controller.show();
-
-        setState(TimbyaState.LISTENING);
-        speechManager.startListening(speechListener);
+        controller.setShrunk(true);
+        setState(TimbyaState.IDLE);
     }
 
     @Override
