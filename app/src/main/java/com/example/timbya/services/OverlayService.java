@@ -173,7 +173,12 @@ public class OverlayService extends Service {
             @Override
             public void onError(String error) {
                 controller.setReply(error);
-                setState(TimbyaState.LISTENING);
+                setState(TimbyaState.SPEAKING);
+
+                speechManager.mute();
+                armSpeakingWatchdog();
+
+                speaker.say(error, () -> resumeOnce("tts-error-done"));
             }
         });
     }

@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+
 
 
     <queries>
@@ -20,6 +25,7 @@
             <category android:name="android.intent.category.APP_MUSIC" />
         </intent>
         <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.youtube" />
     </queries>
     <queries>
 

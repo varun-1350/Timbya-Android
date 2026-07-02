@@ -10,22 +10,55 @@ import android.provider.Settings;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.example.timbya.actions.FileOpener;
 
 public class ActionExecutor {
 
     private final Context context;
     private final ContactResolver contactResolver;
+    FileOpener fileOpener;
+    private List<FileOpener.FileMatch> pendingFileMatches;
+
 
     private static final Pattern WHATSAPP_PATTERN = Pattern.compile(
             "message\\s+(.+?)\\s+to\\s+(.+?)\\s+on\\s+whatsapp", Pattern.CASE_INSENSITIVE);
+    private static final Pattern YOUTUBE_SUFFIX_PATTERN = Pattern.compile(
+            "(?:search|play)\\s+(.+?)\\s+(?:on|in)\\s+youtube", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern YOUTUBE_PREFIX_PATTERN = Pattern.compile(
+            "open youtube and search\\s+(.+)", Pattern.CASE_INSENSITIVE);
 
     public ActionExecutor(Context context) {
         this.context = context;
         this.contactResolver = new ContactResolver(context);
+        this.fileOpener = new FileOpener(context);
+    }
+    private ActionResult searchYouTube(String query) {
+        String url = "https://www.youtube.com/results?search_query=" + Uri.encode(query);
+
+        try {
+            Intent appIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            appIntent.setPackage("com.google.android.youtube");
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(appIntent);
+            return new ActionResult(true, "Searching YouTube for " + query);
+        } catch (Exception e) {
+            try {
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(browserIntent);
+                return new ActionResult(true, "YouTube app isn't installed, searching in your browser instead");
+            } catch (Exception e2) {
+                return new ActionResult(true, "I couldn't open YouTube.");
+            }
+        }
     }
 
     public ActionResult execute(String originalCommand) {
-
+        if (pendingFileMatches != null) {
+            ActionResult resolved = resolvePendingFileChoice(originalCommand);
+            if (resolved != null) return resolved;
+        }
         // WhatsApp: match against the ORIGINAL text so the message keeps its casing.
         Matcher m = WHATSAPP_PATTERN.matcher(originalCommand.trim());
         if (m.find()) {
@@ -33,18 +66,31 @@ public class ActionExecutor {
             String contactName = m.group(2).trim();
             return sendWhatsAppMessage(contactName, message);
         }
+        Matcher yPrefix = YOUTUBE_PREFIX_PATTERN.matcher(originalCommand.trim());
+        if (yPrefix.find()) {
+            return searchYouTube(yPrefix.group(1).trim());
+        }
+
+        Matcher ySuffix = YOUTUBE_SUFFIX_PATTERN.matcher(originalCommand.trim());
+        if (ySuffix.find()) {
+            return searchYouTube(ySuffix.group(1).trim());
+        }
 
         String command = originalCommand.toLowerCase().trim();
 
         if (command.startsWith("open ")) {
-            String appName = command.substring(5).trim();
+            String target = command.substring(5).trim().replace(" from file manager", "").trim();
 
-            if (appName.contains("music")) {
+            if (looksLikeFileName(target)) {
+                return openFileByName(target);
+            }
+
+            if (target.contains("music")) {
                 ActionResult musicResult = openAnyMusicApp();
                 if (musicResult != null) return musicResult;
             }
 
-            return openAppByName(appName);
+            return openAppByName(target);
         }
 
         if (command.contains("settings")) {
@@ -55,6 +101,55 @@ public class ActionExecutor {
         }
 
         return new ActionResult(false, "");
+    }
+    private boolean looksLikeFileName(String text) {
+        return text.matches(".*\\.[a-zA-Z0-9]{2,5}$");
+    }
+
+    private ActionResult openFileByName(String fileName) {
+        List<FileOpener.FileMatch> matches = fileOpener.search(fileName);
+
+        if (matches.isEmpty()) {
+            return new ActionResult(true, "I couldn't find a file named " + fileName + " on this device.");
+        }
+
+        if (matches.size() == 1) {
+            fileOpener.open(matches.get(0));
+            return new ActionResult(true, "Opening " + matches.get(0).displayName);
+        }
+
+        pendingFileMatches = matches;
+        StringBuilder sb = new StringBuilder("I found " + matches.size() + " files named " + fileName + ". Say a number: ");
+        for (int i = 0; i < matches.size(); i++) {
+            sb.append(i + 1).append(") ").append(matches.get(i).relativePath).append(" ");
+        }
+        return new ActionResult(true, sb.toString().trim());
+    }
+
+    private ActionResult resolvePendingFileChoice(String originalCommand) {
+        Integer choice = parseOrdinal(originalCommand.trim().toLowerCase());
+
+        if (choice == null || choice < 1 || choice > pendingFileMatches.size()) {
+            pendingFileMatches = null; // don't get stuck waiting forever on an unrelated reply
+            return null;
+        }
+
+        FileOpener.FileMatch chosen = pendingFileMatches.get(choice - 1);
+        pendingFileMatches = null;
+        fileOpener.open(chosen);
+        return new ActionResult(true, "Opening " + chosen.displayName);
+    }
+
+    private Integer parseOrdinal(String text) {
+        if (text.matches("\\d+")) return Integer.parseInt(text);
+        switch (text) {
+            case "one": case "first": return 1;
+            case "two": case "second": return 2;
+            case "three": case "third": return 3;
+            case "four": case "fourth": return 4;
+            case "five": case "fifth": return 5;
+            default: return null;
+        }
     }
 
     private ActionResult sendWhatsAppMessage(String contactName, String message) {

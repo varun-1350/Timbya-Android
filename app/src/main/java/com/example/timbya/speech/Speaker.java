@@ -44,26 +44,89 @@ public class Speaker {
      * speaking and resumed the instant TTS finishes (prevents Timbya
      * hearing and reacting to its own voice).
      */
-    public void say(String text, Runnable onDone){
+    private final java.util.Random random = new java.util.Random();
+    private static final float BASE_RATE = 0.90f;
+    private static final float BASE_PITCH = 0.85f;
+
+    public void say(String text, Runnable onDone) {
+
+        java.util.List<String> sentences = splitIntoSentences(text);
+        if (sentences.isEmpty()) {
+            if (onDone != null) mainHandler.post(onDone);
+            return;
+        }
+
+        String batchId = "TIMBYA_" + System.currentTimeMillis();
+        String finalUtteranceId = batchId + "_" + (sentences.size() - 1);
 
         tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
             @Override public void onStart(String utteranceId) { }
 
             @Override public void onDone(String utteranceId) {
-                if (onDone != null) mainHandler.post(onDone);
+                if (finalUtteranceId.equals(utteranceId) && onDone != null) {
+                    mainHandler.post(onDone);
+                }
             }
 
             @Override public void onError(String utteranceId) {
-                if (onDone != null) mainHandler.post(onDone);
+                if (finalUtteranceId.equals(utteranceId) && onDone != null) {
+                    mainHandler.post(onDone);
+                }
             }
         });
 
-        tts.speak(
-                text,
-                TextToSpeech.QUEUE_FLUSH,
-                null,
-                "TIMBYA");
+        for (int i = 0; i < sentences.size(); i++) {
+            String sentence = sentences.get(i);
+            applyNaturalVariation(sentence);
 
+            String utteranceId = batchId + "_" + i;
+            int queueMode = (i == 0) ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD;
+            tts.speak(sentence, queueMode, null, utteranceId);
+
+            if (i < sentences.size() - 1) {
+                tts.playSilentUtterance(pauseAfter(sentence), TextToSpeech.QUEUE_ADD, batchId + "_pause_" + i);
+            }
+        }
+    }
+
+    /** Small per-sentence pitch/rate jitter, plus a slight slow-down on short
+     *  or number-bearing sentences (a lightweight stand-in for word-level
+     *  emphasis — Android's default TTS engine doesn't reliably support true
+     *  SSML emphasis tags across devices). */
+    private void applyNaturalVariation(String sentence) {
+        float rateJitter = (random.nextFloat() - 0.5f) * 0.08f;   // ±0.04
+        float pitchJitter = (random.nextFloat() - 0.5f) * 0.06f;  // ±0.03
+
+        float rate = BASE_RATE + rateJitter;
+        float pitch = BASE_PITCH + pitchJitter;
+
+        boolean looksImportant = sentence.matches(".*\\d.*") || sentence.split("\\s+").length <= 5;
+        if (looksImportant) rate -= 0.05f;
+
+        tts.setSpeechRate(Math.max(0.75f, rate));
+        tts.setPitch(Math.max(0.75f, pitch));
+    }
+
+    private long pauseAfter(String sentence) {
+        char last = sentence.charAt(sentence.length() - 1);
+        long base;
+        switch (last) {
+            case '?': base = 380; break;
+            case '!': base = 300; break;
+            case '.': base = 260; break;
+            default:  base = 150;
+        }
+        long jitter = (long) ((random.nextFloat() - 0.5f) * 80); // ±40ms
+        return Math.max(80, base + jitter);
+    }
+
+    private java.util.List<String> splitIntoSentences(String text) {
+        java.util.List<String> result = new java.util.ArrayList<>();
+        if (text == null || text.trim().isEmpty()) return result;
+        for (String s : text.trim().split("(?<=[.!?])\\s+")) {
+            if (!s.trim().isEmpty()) result.add(s.trim());
+        }
+        return result;
     }
     public void speak(String text){
 

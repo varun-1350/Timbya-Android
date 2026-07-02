@@ -51,13 +51,40 @@ public class TimbyaEngine {
                         memoryManager.extractAndStore(command, reply);
 
                     } else {
-                        listener.onError("No response from Gemini.");
+                        listener.onError(describeApiError(response));
                     }
                 }
 
                 @Override
                 public void onFailure(Call<GeminiResponse> call, Throwable t) {
-                    listener.onError(t.getMessage());
+                    if (t instanceof java.net.UnknownHostException
+                            || t instanceof java.net.SocketTimeoutException
+                            || t instanceof java.io.IOException) {
+                        listener.onError("Looks like you're offline. Check your internet connection and try again.");
+                    } else {
+                        listener.onError("Something went wrong reaching the AI. Please try again.");
+                    }
+                }
+
+                private String describeApiError(Response<GeminiResponse> response) {
+                    int code = response.code();
+                    String errorBody = "";
+                    try {
+                        if (response.errorBody() != null) errorBody = response.errorBody().string();
+                    } catch (Exception ignored) { }
+
+                    String lower = errorBody.toLowerCase();
+
+                    if (code == 429 || lower.contains("resource_exhausted") || lower.contains("quota")) {
+                        return "I've reached my Gemini usage limit for now. Please try again later, or switch to another available AI model.";
+                    }
+                    if (code == 401 || code == 403 || lower.contains("api_key_invalid") || lower.contains("permission_denied")) {
+                        return "There's a problem with the Gemini API key — it may be missing or invalid.";
+                    }
+                    if (code >= 500) {
+                        return "Gemini's servers are having trouble right now. Please try again in a moment.";
+                    }
+                    return "I hit an error talking to Gemini. Please try again.";
                 }
             });
         });

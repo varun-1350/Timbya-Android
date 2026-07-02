@@ -15,9 +15,9 @@ public class Constants {
     // status line master switch (Listening / Processing / Speaking labels)
     public static final boolean SHOW_STATUS_TEXT = true;
     // "Listening..." label specifically (mic icon color already shows this state)
-    public static final boolean SHOW_LISTENING_LABEL = false;
+    public static final boolean SHOW_LISTENING_LABEL = true;
     // internal AI-processing state label ("Processing...")
-    public static final boolean SHOW_AI_STATE = false;
+    public static final boolean SHOW_AI_STATE = true;
     // live partial transcript preview in the reply box while listening
-    public static final boolean SHOW_DEBUG_TEXT = false;
+    public static final boolean SHOW_DEBUG_TEXT = true;
 }
