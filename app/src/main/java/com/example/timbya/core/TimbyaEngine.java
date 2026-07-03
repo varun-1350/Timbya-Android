@@ -74,7 +74,7 @@ public class TimbyaEngine {
                             return;
                         }
                         listener.onReply(reply);
-                        memoryManager.extractAndStore(command, reply);
+                        memoryManager.extractAndStore(command);
 
                     } else {
                         listener.onError(describeApiError(response));

@@ -64,7 +64,7 @@ public class MemoryManager {
         });
     }
 
-    /* public void forget(String category, String keyName) {
+     public void forget(String category, String keyName) {
         executor.execute(() -> {
             try {
                 dao.delete(category, keyName);
@@ -72,7 +72,7 @@ public class MemoryManager {
                 Log.e(TAG, "Failed to delete memory", e);
             }
         });
-    } */
+    }
 
     /** Keyword-overlap retrieval, falling back to most-recent so continuity
      *  (e.g. the user's name) still surfaces even without a direct hit. */
@@ -113,9 +113,9 @@ public class MemoryManager {
     }
 
     /** Not every message - only durable-fact patterns. No AI call, cheap & deterministic. */
-    public void extractAndStore(String userText, String assistantReply) {
+    public void extractAndStore(String userText) {
         executor.execute(() -> {
-            tryMatch(P_NAME, userText, "NAME", "name");
+            tryMatchName(userText);
             tryMatchUnique(P_LIKE, userText, "INTEREST");
             tryMatchUnique(P_DISLIKE, userText, "DISLIKE");
             tryMatchUnique(P_PROJECT, userText, "PROJECT");
@@ -125,22 +125,27 @@ public class MemoryManager {
         });
     }
 
-    private void tryMatch(Pattern pattern, String text, String category, String keyName) {
-        Matcher m = pattern.matcher(text);
+    private void tryMatchName(String text) {
+        Matcher m = P_NAME.matcher(text);
         if (m.find()) {
-            String value = m.group(1).trim();
-            if (!value.isEmpty()) remember(category, keyName, value);
+            String value = safeGroup(m);
+            if (!value.isEmpty()) remember("NAME", "name", value);
         }
     }
 
     private void tryMatchUnique(Pattern pattern, String text, String category) {
         Matcher m = pattern.matcher(text);
         if (m.find()) {
-            String value = m.group(1).trim();
+            String value = safeGroup(m);
             if (!value.isEmpty()) {
                 remember(category, value.toLowerCase(Locale.getDefault()), value);
             }
         }
+    }
+
+    private static String safeGroup(Matcher m) {
+        String value = m.group(1);
+        return value == null ? "" : value.trim();
     }
 
     private Set<String> wordsOf(String text) {

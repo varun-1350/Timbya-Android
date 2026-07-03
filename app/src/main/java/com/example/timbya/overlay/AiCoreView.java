@@ -1,6 +1,7 @@
 package com.example.timbya.overlay;
 
 import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -13,6 +14,9 @@ import android.view.View;
 import android.view.animation.LinearInterpolator;
 
 import com.example.timbya.core.TimbyaState;
+import androidx.annotation.NonNull;
+
+
 
 /**
  * The "living AI Core" — replaces the old mic icon as Timbya's visual
@@ -47,6 +51,8 @@ public class AiCoreView extends View {
     private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint haloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint sparklePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF ringRect = new RectF();
 
     public AiCoreView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -148,8 +154,10 @@ public class AiCoreView extends View {
         if (ringAnimator != null) ringAnimator.cancel();
     }
 
+
+    @SuppressLint("DrawAllocation")
     @Override
-    protected void onDraw(Canvas canvas) {
+    protected void onDraw(@NonNull Canvas canvas) {
         super.onDraw(canvas);
 
         float cx = getWidth() / 2f;
@@ -165,7 +173,6 @@ public class AiCoreView extends View {
         }
 
         if (state == CoreState.LISTENING) {
-            Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             ripplePaint.setColor(ACCENT);
             ripplePaint.setStyle(Paint.Style.STROKE);
             ripplePaint.setStrokeWidth(3f);
@@ -178,17 +185,17 @@ public class AiCoreView extends View {
             ringPaint.setColor(ACCENT);
             ringPaint.setStrokeWidth(maxRadius * 0.06f);
             ringPaint.setAlpha(200);
-            RectF ringRect = new RectF(cx - maxRadius * 0.85f, cy - maxRadius * 0.85f,
+            ringRect.set(cx - maxRadius * 0.85f, cy - maxRadius * 0.85f,
                     cx + maxRadius * 0.85f, cy + maxRadius * 0.85f);
             canvas.drawArc(ringRect, ringRotation, 90f, false, ringPaint);
         }
 
         glowPaint.setShader(new RadialGradient(cx, cy, radius * 1.8f,
-                new int[]{ withAlpha(ACCENT, 110), withAlpha(ACCENT, 0) },
+                new int[]{ withAlpha(110), withAlpha(0) },
                 null, Shader.TileMode.CLAMP));
         canvas.drawCircle(cx, cy, radius * 1.8f, glowPaint);
 
-        corePaint.setColor(state == CoreState.IDLE ? withAlpha(ACCENT, 220) : ACCENT);
+        corePaint.setColor(state == CoreState.IDLE ? withAlpha(220) : ACCENT);
         canvas.drawCircle(cx, cy, radius, corePaint);
 
         if (sparkleAlpha > 0f) {
@@ -197,7 +204,7 @@ public class AiCoreView extends View {
         }
     }
 
-    private int withAlpha(int color, int alpha) {
-        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    private int withAlpha(int alpha) {
+        return Color.argb(alpha, Color.red(ACCENT), Color.green(ACCENT), Color.blue(ACCENT));
     }
 }

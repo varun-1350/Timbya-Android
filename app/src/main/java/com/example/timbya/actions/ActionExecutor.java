@@ -52,6 +52,13 @@ public class ActionExecutor {
             }
         }
     }
+    /** All our patterns' group 1/2 are mandatory (no '?' quantifier), so a match
+     *  guarantees a non-null group — this just makes that explicit for the analyzer
+     *  and protects against a future pattern change that adds an optional group. */
+    private static String safeGroup(Matcher m, int group) {
+        String value = m.group(group);
+        return value == null ? "" : value.trim();
+    }
 
     public ActionResult execute(String originalCommand) {
         if (pendingFileMatches != null) {
@@ -61,18 +68,18 @@ public class ActionExecutor {
         // WhatsApp: match against the ORIGINAL text so the message keeps its casing.
         Matcher m = WHATSAPP_PATTERN.matcher(originalCommand.trim());
         if (m.find()) {
-            String message = m.group(1).trim();
-            String contactName = m.group(2).trim();
+            String message = safeGroup(m, 1);
+            String contactName = safeGroup(m, 2);
             return sendWhatsAppMessage(contactName, message);
         }
         Matcher yPrefix = YOUTUBE_PREFIX_PATTERN.matcher(originalCommand.trim());
-        if (yPrefix.find() ) {
-            return searchYouTube(yPrefix.group(1).trim());
+        if (yPrefix.find()) {
+            return searchYouTube(safeGroup(yPrefix, 1));
         }
 
         Matcher ySuffix = YOUTUBE_SUFFIX_PATTERN.matcher(originalCommand.trim());
         if (ySuffix.find()) {
-            return searchYouTube(ySuffix.group(1).trim());
+            return searchYouTube(safeGroup(ySuffix, 1));
         }
 
         String command = originalCommand.toLowerCase().trim();
@@ -187,7 +194,7 @@ public class ActionExecutor {
 
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(launchIntent);
-        return new ActionResult(true, "Opening " + chosen.loadLabel(pm).toString());
+        return new ActionResult(true, "Opening " + chosen.loadLabel(pm));
     }
 
     private ActionResult openAppByName(String appName) {
