@@ -7,4 +7,7 @@
     <color name="timbya_chip_bg">#40FFFFFF</color>
     <color name="timbya_neon_blue">#5CE1FF</color>
     <color name="timbya_neon_purple">#B388FF</color>
+    <color name="timbya_card_bg">#A6111315</color>
+    <color name="timbya_card_border">#1AFFFFFF</color>
+    <color name="timbya_accent">#3B82F6</color>
 </resources>

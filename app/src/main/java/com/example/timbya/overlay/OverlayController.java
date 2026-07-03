@@ -2,9 +2,8 @@ package com.example.timbya.overlay;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.PorterDuff;
+import android.os.Build;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -16,12 +15,14 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 import com.example.timbya.R;
+import com.example.timbya.core.TimbyaState;
 import com.example.timbya.utils.Constants;
 
 public class OverlayController {
 
     private static final int CORNER_MARGIN_DP = 16;
     private static final int TOUCH_SLOP_PX = 16;
+    private static final long TRANSITION_MS = 125; // 250ms total (fade out, switch, fade in)
 
     private final Context context;
     private final WindowManager windowManager;
@@ -31,7 +32,10 @@ public class OverlayController {
     private WindowManager.LayoutParams params;
 
     private View panelContainer;
-    private ImageButton bubble;
+    private View bubble;
+
+    private AiCoreView aiCore;
+    private AiCoreView aiCoreShrunk;
 
     private TextView status;
     private TextView reply;
@@ -42,19 +46,15 @@ public class OverlayController {
 
     private boolean shrunk = false;
 
-
-    // Last known / default shrunk-bubble corner position, in TOP|START
-    // window coordinates. Integer.MIN_VALUE means "not set yet".
     private int bubbleX = Integer.MIN_VALUE;
     private int bubbleY = Integer.MIN_VALUE;
     private static final String PREFS_NAME  = "timbya_overlay_prefs";
-    private static final String PREF_CORNER = "corner";      // 0=TR 1=TL 2=BR 3=BL
-    private static final int    CORNER_TR   = 0;
-    private static final int    CORNER_TL   = 1;
-    private static final int    CORNER_BR   = 2;
-    private static final int    CORNER_BL   = 3;
+    private static final String PREF_CORNER = "corner";
+    private static final int CORNER_TR = 0;
+    private static final int CORNER_TL = 1;
+    private static final int CORNER_BR = 2;
+    private static final int CORNER_BL = 3;
 
-    // drag state
     private float touchStartRawX, touchStartRawY;
     private int paramsStartX, paramsStartY;
     private boolean isDragging = false;
@@ -62,19 +62,18 @@ public class OverlayController {
     public OverlayController(Context context, OverlayCallbacks callbacks) {
         this.context = context;
         this.callbacks = callbacks;
-        this.windowManager =
-                (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        this.windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
     }
 
     public void show() {
-
         if (overlayView != null) return;
 
-        overlayView = LayoutInflater.from(context)
-                .inflate(R.layout.overlay_layout, null);
+        overlayView = LayoutInflater.from(context).inflate(R.layout.overlay_layout, null);
 
         panelContainer = overlayView.findViewById(R.id.panelContainer);
         bubble = overlayView.findViewById(R.id.bubble);
+        aiCore = overlayView.findViewById(R.id.aiCore);
+        aiCoreShrunk = overlayView.findViewById(R.id.aiCoreShrunk);
         status = overlayView.findViewById(R.id.status);
         reply = overlayView.findViewById(R.id.reply);
         mic = overlayView.findViewById(R.id.mic);
@@ -103,7 +102,6 @@ public class OverlayController {
 
     private boolean onBubbleTouch(View v, MotionEvent event) {
         switch (event.getActionMasked()) {
-
             case MotionEvent.ACTION_DOWN:
                 touchStartRawX = event.getRawX();
                 touchStartRawY = event.getRawY();
@@ -131,7 +129,7 @@ public class OverlayController {
                 if (isDragging) {
                     snapToNearestCorner();
                 } else if (callbacks != null) {
-                    callbacks.onShrinkToggle(); // plain tap = expand
+                    callbacks.onShrinkToggle();
                 }
                 return true;
 
@@ -140,8 +138,6 @@ public class OverlayController {
         }
     }
 
-    /** Only reachable while shrunk (bubble is the only visible/draggable
-     *  view), so gravity is always TOP|START by the time this runs. */
     private void snapToNearestCorner() {
         if (overlayView == null || params == null) return;
 
@@ -149,7 +145,7 @@ public class OverlayController {
         int screenWidth  = metrics.widthPixels;
         int screenHeight = metrics.heightPixels;
         int margin       = dpToPx(CORNER_MARGIN_DP);
-        int bubbleSize   = bubble.getWidth() > 0 ? bubble.getWidth() : dpToPx(32);
+        int bubbleSize   = bubble.getWidth() > 0 ? bubble.getWidth() : dpToPx(40);
 
         boolean left = (params.x + bubbleSize / 2f) < screenWidth / 2f;
         boolean top  = (params.y + bubbleSize / 2f) < screenHeight / 2f;
@@ -160,9 +156,7 @@ public class OverlayController {
         bubbleX = targetX;
         bubbleY = targetY;
 
-        // Persist the corner so the next service start restores it
-        int corner = top  ? (left ? CORNER_TL : CORNER_TR)
-                : (left ? CORNER_BL : CORNER_BR);
+        int corner = top ? (left ? CORNER_TL : CORNER_TR) : (left ? CORNER_BL : CORNER_BR);
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putInt(PREF_CORNER, corner).apply();
 
@@ -174,7 +168,7 @@ public class OverlayController {
         final int startY = params.y;
 
         ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
-        animator.setDuration(220);
+        animator.setDuration(200); // corner snap: 200ms per spec
         animator.setInterpolator(new DecelerateInterpolator());
         animator.addUpdateListener(animation -> {
             float fraction = (float) animation.getAnimatedValue();
@@ -199,38 +193,67 @@ public class OverlayController {
         status.setText(text);
     }
 
-    public void setReply(String text) { if (reply != null) reply.setText(text); }
+    /** Reply/debug text only ever shows when SHOW_DEBUG_TEXT is on — the
+     *  orb + one-word status are the UI otherwise. */
+    public void setReply(String text) {
+        if (reply == null) return;
+        if (!Constants.SHOW_DEBUG_TEXT || text == null || text.isEmpty()) {
+            reply.setVisibility(View.GONE);
+            return;
+        }
+        reply.setVisibility(View.VISIBLE);
+        reply.setText(text);
+    }
 
-    public void setMicActive(boolean active) {
-        int color = active ? Color.parseColor("#4DE5FF") : Color.parseColor("#B0B0B0");
-        if (mic != null) mic.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-        if (bubble != null) bubble.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+    /** Listening/idle color is now shown by the orb itself; kept as a
+     *  no-op so OverlayService's existing call site needs no change. */
+    public void setMicActive(boolean active) { }
+
+    /** Drives the AI Core's visual state — the one new hook this redesign
+     *  needs from OverlayService. */
+    public void setAiState(TimbyaState state) {
+        if (aiCore != null) aiCore.setState(state);
+        if (aiCoreShrunk != null) aiCoreShrunk.setState(state);
     }
 
     public void setShrunk(boolean shrunk) {
         this.shrunk = shrunk;
         if (panelContainer == null || bubble == null || overlayView == null || params == null) return;
 
+        View fadeOutView = shrunk ? panelContainer : bubble;
+        View fadeInView = shrunk ? bubble : panelContainer;
+
+        fadeOutView.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f)
+                .setDuration(TRANSITION_MS)
+                .withEndAction(() -> {
+                    applyShrunkLayout(shrunk);
+                    fadeInView.setAlpha(0f);
+                    fadeInView.setScaleX(0.9f);
+                    fadeInView.setScaleY(0.9f);
+                    fadeInView.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(TRANSITION_MS).start();
+                })
+                .start();
+    }
+
+    /** Unchanged positioning/anchoring logic — only wrapped in the fade
+     *  transition above, nothing about corner math or gravity is touched. */
+    private void applyShrunkLayout(boolean shrunk) {
         panelContainer.setVisibility(shrunk ? View.GONE : View.VISIBLE);
         bubble.setVisibility(shrunk ? View.VISIBLE : View.GONE);
 
         if (shrunk) {
             params.gravity = Gravity.TOP | Gravity.START;
             if (bubbleX == Integer.MIN_VALUE) {
-                // No position set this session — load saved corner, or default to TOP RIGHT
                 DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-                int margin     = dpToPx(CORNER_MARGIN_DP);
-                int bubbleSize = dpToPx(56); // matches overlay_bubble_size
+                int margin = dpToPx(CORNER_MARGIN_DP);
+                int bubbleSize = dpToPx(40);
                 int savedCorner = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .getInt(PREF_CORNER, CORNER_TR); // first install → Top Right
+                        .getInt(PREF_CORNER, CORNER_TR);
 
                 switch (savedCorner) {
-                    case CORNER_TL:
-                        bubbleX = margin;
-                        bubbleY = margin;
-                        break;
+                    case CORNER_TL: bubbleX = margin; bubbleY = margin; break;
                     case CORNER_BR:
-                        bubbleX = metrics.widthPixels  - bubbleSize - margin;
+                        bubbleX = metrics.widthPixels - bubbleSize - margin;
                         bubbleY = metrics.heightPixels - bubbleSize - margin;
                         break;
                     case CORNER_BL:
@@ -247,19 +270,11 @@ public class OverlayController {
             params.x = bubbleX;
             params.y = bubbleY;
         } else {
-            // Anchor the expanded panel to the same corner as the bubble.
-            // We know which corner from bubbleX/bubbleY, so derive gravity flags
-            // and let the panel grow inward from that edge.
             DisplayMetrics metrics = context.getResources().getDisplayMetrics();
             boolean onLeft = bubbleX < metrics.widthPixels / 2;
             boolean onTop  = bubbleY < metrics.heightPixels / 2;
 
-            int hGravity = onLeft  ? Gravity.START : Gravity.END;
-            int vGravity = onTop   ? Gravity.TOP   : Gravity.BOTTOM;
-            params.gravity = hGravity | vGravity;
-
-            // Keep the panel edge flush with the screen edge (no offset needed —
-            // WRAP_CONTENT + END/START/TOP/BOTTOM gravity does the right thing).
+            params.gravity = (onLeft ? Gravity.START : Gravity.END) | (onTop ? Gravity.TOP : Gravity.BOTTOM);
             params.x = 0;
             params.y = 0;
         }
@@ -273,6 +288,7 @@ public class OverlayController {
         if (overlayView == null) return;
         windowManager.removeView(overlayView);
         overlayView = null; panelContainer = null; bubble = null;
+        aiCore = null; aiCoreShrunk = null;
         status = null; reply = null; mic = null;
         btnShrink = null; btnClose = null; btnPowerOff = null; params = null;
     }

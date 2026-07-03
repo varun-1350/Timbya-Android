@@ -9,91 +9,102 @@
         android:layout_width="@dimen/overlay_panel_width"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:gravity="center_horizontal"
         android:padding="@dimen/overlay_panel_padding"
-        android:background="@drawable/bg_overlay"
+        android:background="@drawable/bg_glass_card"
         android:elevation="20dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+        <com.example.timbya.overlay.AiCoreView
+            android:id="@+id/aiCore"
+            android:layout_width="@dimen/overlay_core_size"
+            android:layout_height="@dimen/overlay_core_size"/>
 
-            <TextView
-                android:id="@+id/title"
-                android:text="Timbya"
-                android:textColor="@color/white"
-                android:textStyle="bold"
-                android:textSize="@dimen/overlay_title_text_size"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"/>
-
-            <ImageButton
-                android:id="@+id/btnShrink"
-                android:layout_width="@dimen/overlay_icon_button_size"
-                android:layout_height="@dimen/overlay_icon_button_size"
-                android:background="@drawable/bg_icon_chip"
-                android:contentDescription="Shrink"
-                android:src="@android:drawable/arrow_down_float"/>
-
-            <ImageButton
-                android:id="@+id/btnClose"
-                android:layout_width="@dimen/overlay_icon_button_size"
-                android:layout_height="@dimen/overlay_icon_button_size"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/bg_icon_chip"
-                android:contentDescription="Close"
-                android:src="@android:drawable/ic_menu_close_clear_cancel"/>
-        </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/mic"
-            android:layout_width="@dimen/overlay_mic_size"
-            android:layout_height="@dimen/overlay_mic_size"
-            android:layout_gravity="center"
-            android:layout_marginTop="@dimen/overlay_mic_margin_top"
-            android:background="@drawable/bg_icon_chip"
-            android:contentDescription="Mic toggle"
-            android:src="@android:drawable/ic_btn_speak_now"/>
+        <TextView
+            android:id="@+id/title"
+            android:text="Timbya"
+            android:textColor="@color/white"
+            android:textStyle="bold"
+            android:textSize="@dimen/overlay_title_text_size"
+            android:layout_marginTop="@dimen/overlay_title_margin_top"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
 
         <TextView
             android:id="@+id/status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Ready"
-            android:textColor="@color/white"
-            android:textSize="@dimen/overlay_status_text_size"
-            android:layout_gravity="center"/>
+            android:layout_marginTop="@dimen/overlay_status_margin_top"
+            android:text="Idle"
+            android:textColor="@color/timbya_accent"
+            android:textSize="@dimen/overlay_status_text_size"/>
 
         <TextView
             android:id="@+id/reply"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="@dimen/overlay_reply_padding_top"
+            android:layout_marginTop="6dp"
             android:textColor="@color/white"
             android:textSize="@dimen/overlay_reply_text_size"
-            android:text=""/>
+            android:text=""
+            android:visibility="gone"/>
 
-        <ImageButton
-            android:id="@+id/btnPowerOff"
-            android:layout_width="@dimen/overlay_power_button_size"
-            android:layout_height="@dimen/overlay_power_button_size"
-            android:layout_gravity="end"
-            android:layout_marginTop="@dimen/overlay_power_margin_top"
-            android:background="@drawable/bg_icon_chip"
-            android:contentDescription="Power off"
-            android:src="@android:drawable/ic_lock_power_off"/>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="@dimen/overlay_button_row_margin_top">
+
+            <ImageButton
+                android:id="@+id/mic"
+                android:layout_width="@dimen/overlay_button_size"
+                android:layout_height="@dimen/overlay_button_size"
+                android:background="@drawable/bg_button_ripple"
+                android:contentDescription="Mic toggle"
+                android:src="@android:drawable/ic_btn_speak_now"/>
+
+            <ImageButton
+                android:id="@+id/btnShrink"
+                android:layout_width="@dimen/overlay_button_size"
+                android:layout_height="@dimen/overlay_button_size"
+                android:layout_marginStart="@dimen/overlay_button_gap"
+                android:background="@drawable/bg_button_ripple"
+                android:contentDescription="Shrink"
+                android:src="@android:drawable/arrow_down_float"/>
+
+            <ImageButton
+                android:id="@+id/btnPowerOff"
+                android:layout_width="@dimen/overlay_button_size"
+                android:layout_height="@dimen/overlay_button_size"
+                android:layout_marginStart="@dimen/overlay_button_gap"
+                android:background="@drawable/bg_button_ripple"
+                android:contentDescription="Power off"
+                android:src="@android:drawable/ic_lock_power_off"/>
+
+            <ImageButton
+                android:id="@+id/btnClose"
+                android:layout_width="@dimen/overlay_button_size"
+                android:layout_height="@dimen/overlay_button_size"
+                android:layout_marginStart="@dimen/overlay_button_gap"
+                android:background="@drawable/bg_button_ripple"
+                android:contentDescription="Close"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"/>
+        </LinearLayout>
 
     </LinearLayout>
 
-    <ImageButton
+    <FrameLayout
         android:id="@+id/bubble"
-        android:layout_width="@dimen/overlay_bubble_size"
-        android:layout_height="@dimen/overlay_bubble_size"
-        android:background="@drawable/bg_bubble"
-        android:contentDescription="Expand Timbya"
-        android:src="@android:drawable/ic_btn_speak_now"
-        android:visibility="gone"/>
+        android:layout_width="@dimen/overlay_pill_size"
+        android:layout_height="@dimen/overlay_pill_size"
+        android:background="@drawable/bg_pill"
+        android:visibility="gone">
+
+        <com.example.timbya.overlay.AiCoreView
+            android:id="@+id/aiCoreShrunk"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="6dp"/>
+    </FrameLayout>
 
 </FrameLayout>

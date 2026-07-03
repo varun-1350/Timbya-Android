@@ -1,15 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="overlay_panel_width">150dp</dimen>
-    <dimen name="overlay_panel_padding">8dp</dimen>
-    <dimen name="overlay_mic_size">44dp</dimen>
-    <dimen name="overlay_bubble_size">32dp</dimen>
-    <dimen name="overlay_icon_button_size">20dp</dimen>
-    <dimen name="overlay_power_button_size">24dp</dimen>
-    <dimen name="overlay_title_text_size">14sp</dimen>
-    <dimen name="overlay_status_text_size">11sp</dimen>
-    <dimen name="overlay_reply_text_size">11sp</dimen>
-    <dimen name="overlay_reply_padding_top">8dp</dimen>
-    <dimen name="overlay_mic_margin_top">4dp</dimen>
-    <dimen name="overlay_power_margin_top">4dp</dimen>
+    <dimen name="overlay_panel_padding">12dp</dimen>
+    <dimen name="overlay_core_size">56dp</dimen>
+    <dimen name="overlay_pill_size">40dp</dimen>
+    <dimen name="overlay_button_size">24dp</dimen>
+    <dimen name="overlay_button_gap">8dp</dimen>
+    <dimen name="overlay_title_text_size">12sp</dimen>
+    <dimen name="overlay_status_text_size">10sp</dimen>
+    <dimen name="overlay_reply_text_size">10sp</dimen>
+    <dimen name="overlay_title_margin_top">6dp</dimen>
+    <dimen name="overlay_status_margin_top">2dp</dimen>
+    <dimen name="overlay_button_row_margin_top">10dp</dimen>
 </resources>

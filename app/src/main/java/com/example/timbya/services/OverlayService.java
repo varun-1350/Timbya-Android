@@ -207,6 +207,7 @@ public class OverlayService extends Service {
 
         controller.setStatus(label);
         controller.setMicActive(newState == TimbyaState.LISTENING);
+        controller.setAiState(newState);
     }
 
     private void armSpeakingWatchdog() {

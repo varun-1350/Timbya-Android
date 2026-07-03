@@ -32,7 +32,11 @@ import java.util.Locale;
 public class SpeechManager {
 
     private static final String TAG = "TIMBYA_VOICE";
-    private static final long RESTART_DELAY_MS = 350;
+    private static final long RESTART_DELAY_MS = 500;
+    private static final long SERVER_DISCONNECT_BACKOFF_MS = 900;
+    private static final long MAX_SERVER_DISCONNECT_BACKOFF_MS = 3000;
+
+    private int consecutiveServerDisconnects = 0;
     private static final long BEEP_MUTE_MS = 700;
 
     private static final int[] BEEP_STREAMS = {
@@ -103,7 +107,7 @@ public class SpeechManager {
     /** Called once per turn when it's time to start listening again. */
     public void resume() {
         isMuted = false;
-        if (shouldRestart) scheduleRestart();
+        if (shouldRestart) scheduleRestart(RESTART_DELAY_MS);
     }
 
     public void destroy() {
@@ -119,8 +123,8 @@ public class SpeechManager {
         else mainHandler.post(r);
     }
 
-    private void scheduleRestart() {
-        mainHandler.postDelayed(this::beginSession, RESTART_DELAY_MS);
+    private void scheduleRestart(long delayMs) {
+        mainHandler.postDelayed(this::beginSession, delayMs);
     }
 
     /** Creates a brand-new SpeechRecognizer for this turn. Must run on the
@@ -235,8 +239,12 @@ public class SpeechManager {
 
     private class InternalListener implements RecognitionListener {
 
-        @Override public void onReadyForSpeech(Bundle params) { notifyMicStatus("Ready"); }
-
+        @Override public void onReadyForSpeech(Bundle params) {
+            // Reaching "ready" proves this session actually bound successfully —
+            // safe to drop back to the normal restart delay.
+            consecutiveServerDisconnects = 0;
+            notifyMicStatus("Ready");
+        }
         @Override public void onBeginningOfSpeech() {
             Log.d(TAG, "SPEECH_DETECTED");
             if (listener != null) listener.onSpeechDetected();
@@ -257,13 +265,24 @@ public class SpeechManager {
             if (error == SpeechRecognizer.ERROR_NO_MATCH
                     || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                 Log.d(TAG, "No speech (idle): " + message);
-                restartIfNeeded();
+                restartIfNeeded(RESTART_DELAY_MS);
                 return;
             }
 
             Log.e(TAG, "RECOGNIZER_ERROR: " + message);
             notifyError(message);
-            restartIfNeeded();
+
+            long backoff;
+            if (error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
+                consecutiveServerDisconnects++;
+                long scaled = SERVER_DISCONNECT_BACKOFF_MS * (1L << Math.min(consecutiveServerDisconnects - 1, 3));
+                backoff = Math.min(scaled, MAX_SERVER_DISCONNECT_BACKOFF_MS);
+                Log.w(TAG, "Server disconnected " + consecutiveServerDisconnects
+                        + "x in a row, backing off " + backoff + "ms");
+            } else {
+                backoff = RESTART_DELAY_MS;
+            }
+            restartIfNeeded(backoff);
         }
 
         @Override public void onResults(Bundle results) {
@@ -275,7 +294,7 @@ public class SpeechManager {
                 Log.d(TAG, "TRANSCRIPT: " + transcript);
                 if (listener != null) listener.onSpeechResult(transcript);
             }
-            restartIfNeeded();
+            restartIfNeeded(RESTART_DELAY_MS);
         }
 
         @Override public void onPartialResults(Bundle partialResults) {
@@ -288,8 +307,8 @@ public class SpeechManager {
 
         @Override public void onEvent(int eventType, Bundle params) { }
 
-        private void restartIfNeeded() {
-            if (shouldRestart && !isMuted) scheduleRestart();
+        private void restartIfNeeded(long delayMs) {
+            if (shouldRestart && !isMuted) scheduleRestart(delayMs);
         }
 
         private String describeError(int error) {

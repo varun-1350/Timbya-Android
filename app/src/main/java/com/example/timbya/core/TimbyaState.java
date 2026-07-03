@@ -1,10 +1,10 @@
 package com.example.timbya.core;
 
 public enum TimbyaState {
-    IDLE("Ready"),
-    LISTENING("Listening..."),
-    PROCESSING("Thinking..."),
-    SPEAKING("Speaking..."),
+    IDLE("Idle"),
+    LISTENING("Listening"),
+    PROCESSING("Thinking"),
+    SPEAKING("Speaking"),
     OFF("Off");
 
     private final String label;
