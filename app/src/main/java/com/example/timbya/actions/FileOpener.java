@@ -51,7 +51,8 @@ public class FileOpener {
         String[] selectionArgs = { "%" + query + "%" };
 
         try (Cursor cursor = context.getContentResolver().query(
-                collection, projection, selection, selectionArgs, null)) {
+                collection, projection, selection, selectionArgs,
+                MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC LIMIT 10")) {
 
             if (cursor != null) {
                 int idIdx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);

@@ -17,6 +17,9 @@ public class Speaker {
     private static final String TAG = "TIMBYA_VOICE";
 
     private TextToSpeech tts = null;
+    private volatile boolean ttsReady = false;
+    private String pendingText = null;
+    private Runnable pendingOnDone = null;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final java.util.Random random = new java.util.Random();
 
@@ -27,16 +30,39 @@ public class Speaker {
     private final Set<Locale> warnedUnavailableLocales = new HashSet<>();
 
     public Speaker(Context context) {
-        tts = new TextToSpeech(context, status -> {
+        // Capture the instance in a local variable BEFORE the lambda closes over it.
+        // This breaks the write-before-read race: the local variable is assigned
+        // at construction time, visible to the callback regardless of when it fires.
+        TextToSpeech[] holder = new TextToSpeech[1];
+        holder[0] = new TextToSpeech(context, status -> {
             if (status == TextToSpeech.SUCCESS) {
-                tts.setLanguage(LanguageSegmenter.ENGLISH);
-                tts.setSpeechRate(BASE_RATE);
-                tts.setPitch(BASE_PITCH);
+                // Use holder[0], not the field 'tts' — holder[0] is guaranteed
+                // to be visible here because it was written before startListening
+                // was called on the TTS service.
+                holder[0].setLanguage(LanguageSegmenter.ENGLISH);
+                holder[0].setSpeechRate(BASE_RATE);
+                holder[0].setPitch(BASE_PITCH);
+                tts = holder[0];   // assign to field only after configuration is done
+                ttsReady = true;
+                Log.d(TAG, "TTS engine ready");
+                if (pendingText != null) {
+                    String text = pendingText;
+                    Runnable done = pendingOnDone;
+                    pendingText = null;
+                    pendingOnDone = null;
+                    mainHandler.post(() -> say(text, done));
+                }
+            } else {
+                Log.e(TAG, "TTS init failed, status=" + status);
+                ttsReady = false;
             }
         });
+        // Do NOT assign tts here. It's assigned inside the callback once
+        // the engine is confirmed ready. All say() calls check ttsReady first.
     }
 
     public void say(String text) {
+
         say(text, null);
     }
 
@@ -66,6 +92,12 @@ public class Speaker {
      * than fragmented — pauses only happen between whole sentences.
      */
     public void say(String text, Runnable onDone) {
+        if (!ttsReady || tts == null) {
+            Log.w(TAG, "TTS not ready yet, queuing utterance");
+            pendingText = text;
+            pendingOnDone = onDone;
+            return;
+        }
 
         List<String> sentences = splitIntoSentences(text);
         if (sentences.isEmpty()) {
@@ -181,13 +213,19 @@ public class Speaker {
     }
 
     public void stop() {
-        if (tts != null) tts.stop();
+        if (ttsReady && tts != null) tts.stop();
+        pendingText = null;
+        pendingOnDone = null;
     }
 
     public void shutdown() {
+        ttsReady = false;
+        pendingText = null;
+        pendingOnDone = null;
         if (tts != null) {
             tts.stop();
             tts.shutdown();
+            tts = null;
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.example.timbya.core;
 
+import android.util.Log;
+
 import com.example.timbya.actions.ActionExecutor;
 import com.example.timbya.actions.ActionResult;
 import com.example.timbya.ai.GeminiManager;
@@ -24,6 +26,25 @@ public class TimbyaEngine {
         this.geminiManager = geminiManager;
         this.memoryManager = memoryManager;
     }
+    private String extractReply(GeminiResponse body) {
+        try {
+            if (body == null
+                    || body.candidates == null
+                    || body.candidates.isEmpty()) return null;
+
+            GeminiResponse.Candidate candidate = body.candidates.get(0);
+            if (candidate == null
+                    || candidate.content == null
+                    || candidate.content.parts == null
+                    || candidate.content.parts.isEmpty()) return null;
+
+            GeminiResponse.Part part = candidate.content.parts.get(0);
+            return (part == null) ? null : part.text;
+        } catch (Exception e) {
+            Log.e("TIMBYA_AI", "Failed to extract reply from Gemini response", e);
+            return null;
+        }
+    }
 
     public void process(String command, TimbyaListener listener) {
 
@@ -46,13 +67,19 @@ public class TimbyaEngine {
                             && response.body().candidates != null
                             && !response.body().candidates.isEmpty()) {
 
-                        String reply = response.body().candidates.get(0).content.parts.get(0).text;
+                        GeminiResponse body = response.body();
+                        String reply = extractReply(body);
+                        if (reply == null || reply.trim().isEmpty()) {
+                            listener.onError("Gemini returned an empty response. This can happen when the message was safety-filtered.");
+                            return;
+                        }
                         listener.onReply(reply);
                         memoryManager.extractAndStore(command, reply);
 
                     } else {
                         listener.onError(describeApiError(response));
                     }
+
                 }
 
                 @Override

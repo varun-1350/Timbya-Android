@@ -138,13 +138,18 @@ public class OverlayService extends Service {
         });
 
         controller.show();
+
         controller.setShrunk(true);
+
         setState(TimbyaState.IDLE);
+
+
+
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_SHOW.equals(intent.getAction())) {
+        if (intent != null && ACTION_SHOW.equals(intent.getAction()) && controller != null) {
             controller.show();
         }
         return START_STICKY;
@@ -252,6 +257,7 @@ public class OverlayService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
     }
+
 
     @Nullable
     @Override

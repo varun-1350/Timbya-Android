@@ -3,8 +3,8 @@ package com.example.timbya.overlay;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.PixelFormat;
-import android.os.Build;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -163,20 +163,28 @@ public class OverlayController {
         animateTo(targetX, targetY);
     }
 
+    private ValueAnimator snapAnimator; // field, so hide() can cancel it
+
     private void animateTo(int targetX, int targetY) {
+        if (snapAnimator != null) snapAnimator.cancel();
+
         final int startX = params.x;
         final int startY = params.y;
 
-        ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
-        animator.setDuration(200); // corner snap: 200ms per spec
-        animator.setInterpolator(new DecelerateInterpolator());
-        animator.addUpdateListener(animation -> {
+        snapAnimator = ValueAnimator.ofFloat(0f, 1f);
+        snapAnimator.setDuration(200);
+        snapAnimator.setInterpolator(new DecelerateInterpolator());
+        snapAnimator.addUpdateListener(animation -> {
+            if (overlayView == null || params == null) {
+                animation.cancel();
+                return;
+            }
             float fraction = (float) animation.getAnimatedValue();
             params.x = (int) (startX + (targetX - startX) * fraction);
             params.y = (int) (startY + (targetY - startY) * fraction);
-            if (overlayView != null) windowManager.updateViewLayout(overlayView, params);
+            windowManager.updateViewLayout(overlayView, params);
         });
-        animator.start();
+        snapAnimator.start();
     }
 
     private int dpToPx(int dp) {
@@ -218,7 +226,10 @@ public class OverlayController {
 
     public void setShrunk(boolean shrunk) {
         this.shrunk = shrunk;
-        if (panelContainer == null || bubble == null || overlayView == null || params == null) return;
+        if (overlayView == null || panelContainer == null || bubble == null || params == null) {
+            Log.w("TIMBYA_OVERLAY", "setShrunk called before show() — ignoring");
+            return;
+        }
 
         View fadeOutView = shrunk ? panelContainer : bubble;
         View fadeInView = shrunk ? bubble : panelContainer;
@@ -286,6 +297,7 @@ public class OverlayController {
 
     public void hide() {
         if (overlayView == null) return;
+        if (snapAnimator != null) { snapAnimator.cancel(); snapAnimator = null; }
         windowManager.removeView(overlayView);
         overlayView = null; panelContainer = null; bubble = null;
         aiCore = null; aiCoreShrunk = null;

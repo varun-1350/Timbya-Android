@@ -53,6 +53,8 @@
         <activity
             android:name=".ui.MainActivity"
             android:theme="@style/Theme.Timbya.Launcher"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

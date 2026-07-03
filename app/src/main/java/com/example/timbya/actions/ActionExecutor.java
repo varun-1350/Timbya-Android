@@ -29,9 +29,9 @@ public class ActionExecutor {
             "open youtube and search\\s+(.+)", Pattern.CASE_INSENSITIVE);
 
     public ActionExecutor(Context context) {
-        this.context = context;
-        this.contactResolver = new ContactResolver(context);
-        this.fileOpener = new FileOpener(context);
+        this.context = context.getApplicationContext();
+        this.contactResolver = new ContactResolver(this.context);
+        this.fileOpener = new FileOpener(this.context);
     }
     private ActionResult searchYouTube(String query) {
         String url = "https://www.youtube.com/results?search_query=" + Uri.encode(query);

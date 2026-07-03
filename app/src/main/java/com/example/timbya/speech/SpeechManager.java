@@ -19,13 +19,13 @@ import java.util.Locale;
 
 /**
  * Continuous listening speech manager.
- *
+
  * IMPORTANT: a fresh SpeechRecognizer is created for every turn instead of
  * reusing one instance across cancel()/startListening() cycles. Reusing a
  * single instance is what corrupts the client state and throws
  * ERROR_CLIENT (5) starting on turn 2 — this is a known Android quirk, not
  * a bug in the calling code. destroy()+recreate per session avoids it.
- *
+
  * All entry points are guarded to run on the main thread, since
  * SpeechRecognizer is bound to the Looper that creates it.
  */
@@ -112,6 +112,17 @@ public class SpeechManager {
 
     public void destroy() {
         shouldRestart = false;
+        if (unmuteRunnable != null) {
+            mainHandler.removeCallbacks(unmuteRunnable);
+            // Force unmute streams before destroying to avoid silent phone
+            if (audioManager != null) {
+                for (int stream : BEEP_STREAMS) {
+                    try { audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0); }
+                    catch (Exception ignored) { }
+                }
+                unmuteRunnable = null;
+            }
+        }
         runOnMain(this::teardownRecognizer);
         abandonAudioFocus();
     }
@@ -147,7 +158,9 @@ public class SpeechManager {
 
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, safeLocale());
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, safeLocale());
+        intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000);
@@ -158,6 +171,27 @@ public class SpeechManager {
         recognizer.startListening(intent);
         isListening = true;
         notifyMicStatus("Listening...");
+    }
+    /**
+     * Returns a BCP-47 locale string the on-device recognizer can handle.
+     * Redmi 13 / HyperOS: Locale.getDefault() returns hi_IN (underscore).
+     * The recognizer service needs a BCP-47 tag (hi-IN, hyphen), and even
+     * then has no offline model for Hindi/Marathi on most Indian devices.
+     * "en-IN" is recognized by every Google Speech Service build, still
+     * handles Hinglish/Hindi-accented speech well, and avoids error 11.
+     */
+    private String safeLocale() {
+        Locale def = Locale.getDefault();
+        String lang = def.getLanguage();
+        // These languages have reliable on-device packs across OEMs
+        if ("en".equals(lang) || "de".equals(lang) || "fr".equals(lang)
+                || "es".equals(lang) || "ja".equals(lang) || "pt".equals(lang)) {
+            return def.toLanguageTag(); // guaranteed BCP-47 format
+        }
+        // hi, mr, and all other Indic scripts: fall back to en-IN.
+        // The user can still speak Hinglish/Hindi; the recognizer
+        // transcribes it via the English+Indian accent model.
+        return "en-IN";
     }
 
     /** cancel() then destroy() — cancel() releases the AudioRecord cleanly
@@ -209,22 +243,33 @@ public class SpeechManager {
     /** Best-effort duck of the streams the recognizer beep is commonly
      *  routed on (varies by OEM/Android version). Full removal isn't
      *  possible from app code — this is the least-intrusive available fix. */
+    private Runnable unmuteRunnable;
+
     private void silenceStartupBeep() {
         if (audioManager == null) return;
+
+        // Cancel any pending unmute before muting again
+        if (unmuteRunnable != null) {
+            mainHandler.removeCallbacks(unmuteRunnable);
+        }
+
         for (int stream : BEEP_STREAMS) {
             try {
                 audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0);
             } catch (Exception e) {
-                Log.w(TAG, "Could not mute stream " + stream + " for mic beep", e);
+                Log.w(TAG, "Could not mute stream " + stream, e);
             }
         }
-        mainHandler.postDelayed(() -> {
+
+        unmuteRunnable = () -> {
             for (int stream : BEEP_STREAMS) {
                 try {
                     audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0);
                 } catch (Exception ignored) { }
             }
-        }, BEEP_MUTE_MS);
+            unmuteRunnable = null;
+        };
+        mainHandler.postDelayed(unmuteRunnable, BEEP_MUTE_MS);
     }
 
     private void notifyMicStatus(String status) {
