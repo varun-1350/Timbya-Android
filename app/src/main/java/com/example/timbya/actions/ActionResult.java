@@ -2,8 +2,8 @@ package com.example.timbya.actions;
 
 public class ActionResult {
 
-    private boolean handled;
-    private String reply;
+    public boolean handled;
+    public String reply;
 
     public ActionResult(boolean handled, String reply) {
         this.handled = handled;

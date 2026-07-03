@@ -61,10 +61,10 @@ public class Speaker {
         // the engine is confirmed ready. All say() calls check ttsReady first.
     }
 
-    public void say(String text) {
+    /*public void say(String text) {
 
         say(text, null);
-    }
+    }*/
 
     /** One flattened chunk of speech: text, its locale, prosody for the
      *  sentence it belongs to, and whether a pause follows it. */
@@ -208,9 +208,9 @@ public class Speaker {
         return result;
     }
 
-    public void speak(String text) {
+    /*public void speak(String text) {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "TIMBYA");
-    }
+    }*/
 
     public void stop() {
         if (ttsReady && tts != null) tts.stop();

@@ -10,7 +10,6 @@ import java.util.Set;
 /**
  * Splits a sentence into same-language segments so Speaker can switch the
  * TTS locale per segment instead of treating the whole reply as English.
- *
  * Heuristic-based, not a full language-ID model:
  *  - Devanagari script -> Hindi or Marathi, disambiguated by a small
  *    marker-word lexicon (the two languages share a script, so this is

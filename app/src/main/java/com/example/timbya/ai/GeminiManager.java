@@ -7,7 +7,7 @@ import retrofit2.*;
 
 public class GeminiManager {
 
-    private GeminiRepository repository;
+    public GeminiRepository repository;
 
     public GeminiManager(){
 

@@ -10,7 +10,6 @@ import android.provider.Settings;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import com.example.timbya.actions.FileOpener;
 
 public class ActionExecutor {
 

@@ -64,7 +64,7 @@ public class MemoryManager {
         });
     }
 
-    public void forget(String category, String keyName) {
+    /* public void forget(String category, String keyName) {
         executor.execute(() -> {
             try {
                 dao.delete(category, keyName);
@@ -72,7 +72,7 @@ public class MemoryManager {
                 Log.e(TAG, "Failed to delete memory", e);
             }
         });
-    }
+    } */
 
     /** Keyword-overlap retrieval, falling back to most-recent so continuity
      *  (e.g. the user's name) still surfaces even without a direct hit. */

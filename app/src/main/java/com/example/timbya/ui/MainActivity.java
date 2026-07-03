@@ -19,7 +19,6 @@ import com.example.timbya.services.OverlayService;
  * Pure permission trampoline.
  * Does exactly three things: checks overlay permission, checks mic permission,
  * starts OverlayService, then calls finish(). Nothing else.
- *
  * All engine/speaker/memory resources live in OverlayService only.
  * android:noHistory="true" and android:excludeFromRecents="true" in the
  * manifest ensure finish() here does NOT trigger onTaskRemoved() on the service.

@@ -18,7 +18,6 @@ import com.example.timbya.core.TimbyaState;
  * The "living AI Core" — replaces the old mic icon as Timbya's visual
  * identity. Purely a rendering component with no app logic; driven
  * entirely by setState() calls from OverlayController.
- *
  * pulseMemory() and setVisionActive() are implemented but intentionally
  * left unwired — see design notes in the accompanying response. They're
  * ready for whenever a memory-write hook / vision system exists.
@@ -40,8 +39,8 @@ public class AiCoreView extends View {
     private float ringRotation = 0f;
     private ValueAnimator ringAnimator;
 
-    private float sparkleAlpha = 0f;
-    private boolean visionActive = false;
+    float sparkleAlpha = 0f;
+    boolean visionActive = false;
 
     private final Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -81,17 +80,17 @@ public class AiCoreView extends View {
         }
     }
 
-    public void pulseMemory() {
+    /*public void pulseMemory() {
         ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f, 0f);
         anim.setDuration(600);
         anim.addUpdateListener(a -> { sparkleAlpha = (float) a.getAnimatedValue(); invalidate(); });
         anim.start();
-    }
+    }*/
 
-    public void setVisionActive(boolean active) {
+    /*public void setVisionActive(boolean active) {
         this.visionActive = active;
         invalidate();
-    }
+    }*/
 
     private void startBreathing() {
         coreAnimator = ValueAnimator.ofFloat(0.90f, 1.0f);
