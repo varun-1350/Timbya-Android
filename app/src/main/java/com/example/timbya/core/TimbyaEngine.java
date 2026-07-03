@@ -2,6 +2,8 @@ package com.example.timbya.core;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import com.example.timbya.actions.ActionExecutor;
 import com.example.timbya.actions.ActionResult;
 import com.example.timbya.ai.GeminiManager;
@@ -59,10 +61,10 @@ public class TimbyaEngine {
 
             String prompt = PromptManager.buildPrompt(command, memoryContext);
 
-            geminiManager.askRaw(prompt, new Callback<GeminiResponse>() {
+            geminiManager.askRaw(prompt, new Callback<>() {
 
                 @Override
-                public void onResponse(Call<GeminiResponse> call, Response<GeminiResponse> response) {
+                public void onResponse(@NonNull Call<GeminiResponse> call, @NonNull Response<GeminiResponse> response) {
                     if (response.isSuccessful() && response.body() != null
                             && response.body().candidates != null
                             && !response.body().candidates.isEmpty()) {
@@ -82,11 +84,10 @@ public class TimbyaEngine {
 
                 }
 
+
                 @Override
-                public void onFailure(Call<GeminiResponse> call, Throwable t) {
-                    if (t instanceof java.net.UnknownHostException
-                            || t instanceof java.net.SocketTimeoutException
-                            || t instanceof java.io.IOException) {
+                public void onFailure(@NonNull Call<GeminiResponse> call, @NonNull Throwable t) {
+                    if (t instanceof java.io.IOException) {
                         listener.onError("Looks like you're offline. Check your internet connection and try again.");
                     } else {
                         listener.onError("Something went wrong reaching the AI. Please try again.");
@@ -96,8 +97,8 @@ public class TimbyaEngine {
                 private String describeApiError(Response<GeminiResponse> response) {
                     int code = response.code();
                     String errorBody = "";
-                    try {
-                        if (response.errorBody() != null) errorBody = response.errorBody().string();
+                    try (okhttp3.ResponseBody body = response.errorBody()) {
+                        if (body != null) errorBody = body.string();
                     } catch (Exception ignored) { }
 
                     String lower = errorBody.toLowerCase();
