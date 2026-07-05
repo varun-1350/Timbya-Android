@@ -1,6 +1,9 @@
 package com.example.timbya.speech;
 
 import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
@@ -28,6 +31,14 @@ public class Speaker {
 
     private Locale currentLocale = LanguageSegmenter.ENGLISH;
     private final Set<Locale> warnedUnavailableLocales = new HashSet<>();
+    // Belt-and-suspenders alongside setAudioAttributes(): some engines still
+    // honor the legacy per-utterance Bundle param over the AudioAttributes
+    // set on the engine instance. Explicitly pinning STREAM_MUSIC here too
+    // costs nothing and closes that gap on engines that prefer it.
+    private static final Bundle SPEECH_PARAMS = new Bundle();
+    static {
+        SPEECH_PARAMS.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
+    }
 
     public Speaker(Context context) {
         // Capture the instance in a local variable BEFORE the lambda closes over it.
@@ -42,6 +53,19 @@ public class Speaker {
                 holder[0].setLanguage(LanguageSegmenter.ENGLISH);
                 holder[0].setSpeechRate(BASE_RATE);
                 holder[0].setPitch(BASE_PITCH);
+
+                // Explicitly attribute speech output as media playback. Without
+                // this, some OEM audio stacks (notably Xiaomi HyperOS/MIUI)
+                // apply a quieter internal gain path to untagged TTS output,
+                // even though it nominally shares the same volume slider as
+                // other media apps. This does NOT boost gain/amplitude — it
+                // only tells the OS which stream/policy category this audio
+                // belongs to, so it's treated the same as any other media app.
+                holder[0].setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build());
+
                 tts = holder[0];   // assign to field only after configuration is done
                 ttsReady = true;
                 Log.d(TAG, "TTS engine ready");
@@ -157,7 +181,7 @@ public class Speaker {
 
             String utteranceId = batchId + "_" + i;
             int queueMode = (i == 0) ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD;
-            tts.speak(chunk.text, queueMode, null, utteranceId);
+            tts.speak(chunk.text, queueMode, SPEECH_PARAMS, utteranceId);
 
             if (chunk.pauseAfterMs > 0 && i < chunks.size() - 1) {
                 tts.playSilentUtterance(chunk.pauseAfterMs, TextToSpeech.QUEUE_ADD, batchId + "_pause_" + i);
