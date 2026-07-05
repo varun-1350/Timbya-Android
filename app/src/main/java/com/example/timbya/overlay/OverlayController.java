@@ -9,8 +9,10 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -68,7 +70,14 @@ public class OverlayController {
     public void show() {
         if (overlayView != null) return;
 
-        overlayView = LayoutInflater.from(context).inflate(R.layout.overlay_layout, null);
+        // Pass a throwaway FrameLayout as the inflation root (attachToRoot=false)
+        // so the inflater can resolve overlay_layout.xml's root-level
+        // layout_width/layout_height/margin attributes correctly, without
+        // actually attaching the result to that FrameLayout — it's just
+        // there to give LayoutParams something to resolve against, since
+        // WindowManager (not a ViewGroup) is the real eventual parent.
+        ViewGroup inflationRoot = new FrameLayout(context);
+        overlayView = LayoutInflater.from(context).inflate(R.layout.overlay_layout, inflationRoot, false);
 
         panelContainer = overlayView.findViewById(R.id.panelContainer);
         bubble = overlayView.findViewById(R.id.bubble);
@@ -97,7 +106,15 @@ public class OverlayController {
         );
         params.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
 
-        windowManager.addView(overlayView, params);
+        try {
+            windowManager.addView(overlayView, params);
+        } catch (Exception e) {
+            // SYSTEM_ALERT_WINDOW was revoked (or window token is otherwise
+            // invalid) — fail safe instead of crashing the service.
+            Log.e("TIMBYA_OVERLAY", "Failed to add overlay view, permission likely revoked", e);
+            overlayView = null;
+            params = null;
+        }
     }
 
     private boolean onBubbleTouch(View v, MotionEvent event) {
@@ -215,6 +232,7 @@ public class OverlayController {
 
     /** Listening/idle color is now shown by the orb itself; kept as a
      *  no-op so OverlayService's existing call site needs no change. */
+    @SuppressWarnings("unused")
     public void setMicActive(boolean active) { }
 
     /** Drives the AI Core's visual state — the one new hook this redesign
@@ -298,7 +316,14 @@ public class OverlayController {
     public void hide() {
         if (overlayView == null) return;
         if (snapAnimator != null) { snapAnimator.cancel(); snapAnimator = null; }
-        windowManager.removeView(overlayView);
+        try {
+            windowManager.removeView(overlayView);
+        } catch (Exception e) {
+            // View may already be detached (e.g. system tore it down after
+            // overlay permission was revoked) — safe to ignore, we're
+            // clearing all references below regardless.
+            Log.w("TIMBYA_OVERLAY", "removeView failed, view likely already detached", e);
+        }
         overlayView = null; panelContainer = null; bubble = null;
         aiCore = null; aiCoreShrunk = null;
         status = null; reply = null; mic = null;

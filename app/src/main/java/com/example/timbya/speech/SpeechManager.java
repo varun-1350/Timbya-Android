@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -212,32 +211,24 @@ public class SpeechManager {
     private boolean requestAudioFocus() {
         if (audioManager == null) return true;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build();
+        // minSdk is 28, so the AudioFocusRequest-based API (added in API 26)
+        // is always available — no pre-Oreo fallback needed.
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build();
 
-            focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(attrs)
-                    .build();
+        focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(attrs)
+                .build();
 
-            return audioManager.requestAudioFocus(focusRequest)
-                    == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-        } else {
-            return audioManager.requestAudioFocus(
-                    null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-        }
+        return audioManager.requestAudioFocus(focusRequest)
+                == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
     private void abandonAudioFocus() {
-        if (audioManager == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-            audioManager.abandonAudioFocusRequest(focusRequest);
-        } else {
-            audioManager.abandonAudioFocus(null);
-        }
+        if (audioManager == null || focusRequest == null) return;
+        audioManager.abandonAudioFocusRequest(focusRequest);
     }
 
     /** Best-effort duck of the streams the recognizer beep is commonly
@@ -337,9 +328,22 @@ public class SpeechManager {
             if (matches != null && !matches.isEmpty()) {
                 String transcript = matches.get(0);
                 Log.d(TAG, "TRANSCRIPT: " + transcript);
-                if (listener != null) listener.onSpeechResult(transcript);
+                if (listener != null) {
+                    listener.onSpeechResult(transcript);
+                    // Do NOT auto-restart here: a real transcript hands control
+                    // to TimbyaEngine, which is now processing async. The mic
+                    // must stay off until OverlayService explicitly calls
+                    // resume() (after mute()/speaking completes). Auto-restarting
+                    // here races the AI response and can trigger a second,
+                    // concurrent engine.process() call.
+                } else {
+                    // No listener to hand the transcript to — safe to keep listening.
+                    restartIfNeeded(RESTART_DELAY_MS);
+                }
+            } else {
+                // Empty result set with no transcript — nothing to process, keep listening.
+                restartIfNeeded(RESTART_DELAY_MS);
             }
-            restartIfNeeded(RESTART_DELAY_MS);
         }
 
         @Override public void onPartialResults(Bundle partialResults) {

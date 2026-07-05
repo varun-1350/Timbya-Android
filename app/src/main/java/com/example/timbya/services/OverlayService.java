@@ -54,6 +54,19 @@ public class OverlayService extends Service {
     public void onCreate() {
         super.onCreate();
 
+        // Guard against a system-triggered restart (START_STICKY) happening
+        // after the user has revoked RECORD_AUDIO from Settings. Starting a
+        // foregroundServiceType="microphone" service without that permission
+        // throws a SecurityException on Android 13/14 and would otherwise
+        // crash-loop the service.
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "RECORD_AUDIO permission missing on service (re)start — stopping self");
+            stopSelf();
+            return;
+        }
+
         // MUST happen before anything touches the microphone: a background
         // process (no visible Activity) is denied mic/audio-focus access on
         // Android 9+. Promoting to a foreground service with a persistent
@@ -101,11 +114,18 @@ public class OverlayService extends Service {
                         setState(TimbyaState.IDLE);
                         break;
                     case SPEAKING:
+                        // Mark this turn's resume as already handled BEFORE
+                        // stopping TTS: some OEM TextToSpeech engines still
+                        // deliver a late onDone/onError callback for the
+                        // interrupted utterance, which would otherwise call
+                        // resumeOnce() a second time for the same turn.
+                        resumeHandled = true;
                         cancelSpeakingWatchdog();
                         speaker.stop();
                         setState(TimbyaState.LISTENING);
                         speechManager.resume();
                         break;
+
                     case IDLE:
                     case OFF:
                     case PROCESSING:
@@ -266,9 +286,9 @@ public class OverlayService extends Service {
     @Override
     public void onDestroy() {
         cancelSpeakingWatchdog();
-        controller.hide();
-        speaker.shutdown();
-        speechManager.destroy();
+        if (controller != null) controller.hide();
+        if (speaker != null) speaker.shutdown();
+        if (speechManager != null) speechManager.destroy();
         stopForeground(true);
         super.onDestroy();
     }
