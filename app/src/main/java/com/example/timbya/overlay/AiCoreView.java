@@ -54,6 +54,7 @@ public class AiCoreView extends View {
     private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF ringRect = new RectF();
 
+
     public AiCoreView(Context context, AttributeSet attrs) {
         super(context, attrs);
         ringPaint.setStyle(Paint.Style.STROKE);
@@ -85,15 +86,17 @@ public class AiCoreView extends View {
             default: setState(CoreState.IDLE); break;
         }
     }
+    /*
+    If needed:
 
-    /*public void pulseMemory() {
+    public void pulseMemory() {
+
+
         ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f, 0f);
         anim.setDuration(600);
         anim.addUpdateListener(a -> { sparkleAlpha = (float) a.getAnimatedValue(); invalidate(); });
         anim.start();
-    }*/
-
-    /*public void setVisionActive(boolean active) {
+    }public void setVisionActive(boolean active) {
         this.visionActive = active;
         invalidate();
     }*/
