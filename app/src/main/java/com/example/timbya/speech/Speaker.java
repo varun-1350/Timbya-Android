@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -189,25 +190,82 @@ public class Speaker {
         }
     }
 
-    /** Switches the active TTS voice locale, falling back to English if the
-     *  device doesn't have that language's voice data installed. */
+    /** Switches the active TTS voice, falling back to English if the device
+     *  doesn't have a usable voice for the requested locale.
+     *  Uses setVoice(Voice) rather than the legacy setLanguage(Locale): on
+     *  many engines (this was confirmed to be the actual root cause of the
+     *  "always English accent" bug) setLanguage() can report success while
+     *  silently leaving the previously active voice in place, especially
+     *  when switching languages repeatedly within one long-lived
+     *  TextToSpeech instance. Selecting a concrete Voice object is the
+     *  reliable path recommended by the TextToSpeech API since API 21. */
     private void ensureLocale(Locale locale) {
         if (locale.equals(currentLocale)) return;
 
-        int availability = tts.isLanguageAvailable(locale);
-        if (availability >= TextToSpeech.LANG_AVAILABLE) {
-            tts.setLanguage(locale);
-            currentLocale = locale;
-        } else {
-            if (!warnedUnavailableLocales.contains(locale)) {
-                Log.w(TAG, "No TTS voice installed for " + locale
-                        + " — falling back to English. User may need to install "
-                        + "this language's voice data under Settings > Accessibility > Text-to-speech.");
-                warnedUnavailableLocales.add(locale);
+        Voice voice = findBestVoice(locale);
+        if (voice != null) {
+            try {
+                if (tts.setVoice(voice) == TextToSpeech.SUCCESS) {
+                    currentLocale = locale;
+                    return;
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "setVoice failed for " + locale + ", falling back", e);
             }
-            tts.setLanguage(LanguageSegmenter.ENGLISH);
-            currentLocale = LanguageSegmenter.ENGLISH;
         }
+
+        // No usable voice for this locale (not installed, network-only and
+        // offline, or setVoice failed) — fall back to English rather than
+        // silently mispronouncing in the wrong accent.
+        if (!warnedUnavailableLocales.contains(locale)) {
+            Log.w(TAG, "No usable TTS voice for " + locale
+                    + " — falling back to English. User may need to install "
+                    + "this language's voice data under Settings > Accessibility > Text-to-speech.");
+            warnedUnavailableLocales.add(locale);
+        }
+        Voice englishVoice = findBestVoice(LanguageSegmenter.ENGLISH);
+        try {
+            if (englishVoice != null) tts.setVoice(englishVoice);
+            else tts.setLanguage(LanguageSegmenter.ENGLISH);
+        } catch (Exception e) {
+            Log.w(TAG, "English fallback voice selection failed", e);
+        }
+        currentLocale = LanguageSegmenter.ENGLISH;
+    }
+
+    /** Picks the best installed, offline-capable voice for a locale:
+     *  exact locale match preferred, same-language-any-country as a second
+     *  choice. Skips voices that require a network connection (avoids
+     *  silent failures/latency mid-conversation) and voices whose data
+     *  isn't actually downloaded yet. Returns null (never throws) if the
+     *  engine's voice list is unavailable or nothing usable is found —
+     *  callers must handle null as "fall back to English." */
+    private Voice findBestVoice(Locale locale) {
+        if (tts == null) return null;
+        Set<Voice> voices;
+        try {
+            voices = tts.getVoices();
+        } catch (Exception e) {
+            Log.w(TAG, "getVoices() failed", e);
+            return null;
+        }
+        if (voices == null) return null;
+
+        Voice languageMatch = null;
+        for (Voice v : voices) {
+            if (v == null || v.getLocale() == null) continue;
+            if (v.isNetworkConnectionRequired()) continue;
+            if (v.getFeatures() != null
+                    && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+
+            if (v.getLocale().equals(locale)) {
+                return v; // exact match, best possible — stop looking
+            }
+            if (languageMatch == null && v.getLocale().getLanguage().equals(locale.getLanguage())) {
+                languageMatch = v;
+            }
+        }
+        return languageMatch;
     }
 
     private long pauseAfter(String sentence) {

@@ -33,19 +33,24 @@ public final class LanguageSegmenter {
     }
 
     private static final Set<String> MARATHI_MARKERS = new HashSet<>(Arrays.asList(
-            "आहे", "आहात", "कसं", "कसे", "मध्ये", "काय", "तुम्ही", "मी", "तू",
+            "आहे", "आहात", "कसं", "कसे", "मध्ये", "काय", "तुम्ही", "मी",
             "नाही", "होय", "बरं", "छान", "करतोय", "करते", "जातोय", "येतोय", "येते"
     ));
 
     private static final Set<String> HINDI_MARKERS = new HashSet<>(Arrays.asList(
-            "है", "हैं", "कैसा", "कैसे", "में", "क्या", "आप", "मैं", "तुम",
+            "है", "हैं", "कैसा", "कैसे", "में", "क्या", "आप", "मैं",
             "नहीं", "हाँ", "अच्छा", "ठीक", "कुछ"
     ));
 
     private static final Set<String> GERMAN_MARKERS = new HashSet<>(Arrays.asList(
             "der", "die", "das", "und", "ist", "nicht", "heute", "wie", "ich",
             "du", "sie", "wir", "ja", "nein", "gut", "danke", "bitte", "wetter",
-            "schön", "auch", "aber", "mit", "für", "auf", "sehr", "haben", "sein"
+            "schön", "auch", "aber", "mit", "für", "auf", "sehr", "haben", "sein",
+            // Added: common conversational function words/contractions missed
+            // before, which fell through to the English default mid-sentence
+            // (e.g. "Wie geht's dir?" tagged only "Wie" as German).
+            "dir", "mir", "mich", "dich", "geht", "gehts", "bist", "kann",
+            "hast", "habe", "möchte", "gerne", "ein", "eine", "einen", "war", "sind"
     ));
 
     /** Groups consecutive same-language words into segments, preserving order. */
