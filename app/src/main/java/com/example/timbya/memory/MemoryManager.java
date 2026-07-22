@@ -15,6 +15,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class MemoryManager {
 
@@ -22,6 +24,9 @@ public class MemoryManager {
 
     public interface MemoryCallback {
         void onMemoryReady(String contextText);
+    }
+    public interface MemoryCommandCallback {
+        void onResult(String reply);
     }
 
     private final MemoryDao dao;
@@ -48,6 +53,19 @@ public class MemoryManager {
             Pattern.compile("(?:i usually|every day i|i always) ([^.!?]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern P_REMEMBER =
             Pattern.compile("remember (?:that )?([^.!?]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern P_FORGET =
+            Pattern.compile("^(?:please )?forget (?:that )?(.+?)[.!?]*$",
+                    Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern P_MEMORY_LIST =
+            Pattern.compile("^(?:what|which) do you remember(?: about me)?[?!.]*$|"
+                            + "^show (?:my )?(?:memories|memory)[?!.]*$",
+                    Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern P_CLEAR_MEMORIES =
+            Pattern.compile("^(?:forget|clear|delete) (?:all )?(?:my )?"
+                            + "(?:memories|memory|everything)[?!.]*$",
+                    Pattern.CASE_INSENSITIVE);
 
     public MemoryManager(Context context) {
         dao = MemoryDatabase.getInstance(context).memoryDao();
@@ -61,6 +79,72 @@ public class MemoryManager {
             } catch (Exception e) {
                 Log.e(TAG, "Failed to save memory", e);
             }
+        });
+    }
+    public void handleMemoryCommand(String userText, MemoryCommandCallback callback) {
+        executor.execute(() -> {
+            String text = userText == null ? "" : userText.trim();
+
+            if (P_CLEAR_MEMORIES.matcher(text).matches()) {
+                try {
+                    dao.clearAll();
+                    postCommandResult(callback, "I've cleared all saved memories.");
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to clear memories", e);
+                    postCommandResult(callback, "I couldn't clear your memories right now.");
+                }
+                return;
+            }
+
+            Matcher rememberMatcher = P_REMEMBER.matcher(text);
+            if (rememberMatcher.matches()) {
+                String fact = cleanValue(safeGroup(rememberMatcher));
+
+                if (!fact.isEmpty()) {
+                    try {
+                        dao.upsert(new MemoryEntry(
+                                "FACT",
+                                stableKey(fact),
+                                fact,
+                                System.currentTimeMillis()));
+
+                        postCommandResult(callback, "I'll remember that.");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to save explicit memory", e);
+                        postCommandResult(callback, "I couldn't save that memory right now.");
+                    }
+                    return;
+                }
+            }
+
+            Matcher forgetMatcher = P_FORGET.matcher(text);
+            if (forgetMatcher.matches()) {
+                String fact = cleanValue(safeGroup(forgetMatcher));
+
+                if (!fact.isEmpty()) {
+                    try {
+                        dao.deleteByKeyName(stableKey(fact));
+                        postCommandResult(callback, "I've forgotten that.");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to forget memory", e);
+                        postCommandResult(callback, "I couldn't remove that memory right now.");
+                    }
+                    return;
+                }
+            }
+
+            if (P_MEMORY_LIST.matcher(text).matches()) {
+                try {
+                    List<MemoryEntry> memories = dao.getAll();
+                    postCommandResult(callback, formatMemoryList(memories));
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to list memories", e);
+                    postCommandResult(callback, "I couldn't read your memories right now.");
+                }
+                return;
+            }
+
+            postCommandResult(callback, null);
         });
     }
 
@@ -78,8 +162,8 @@ public class MemoryManager {
      *  (e.g. the user's name) still surfaces even without a direct hit. */
     public void getRelevantMemories(String userText, MemoryCallback callback) {
         executor.execute(() -> {
-
             List<MemoryEntry> all;
+
             try {
                 all = dao.getAll();
             } catch (Exception e) {
@@ -88,27 +172,50 @@ public class MemoryManager {
                 return;
             }
 
-            if (all.isEmpty()) { postResult(callback, ""); return; }
+            if (all.isEmpty()) {
+                postResult(callback, "");
+                return;
+            }
 
-            Set<String> queryWords = wordsOf(userText);
-            List<MemoryEntry> scored = new ArrayList<>();
+            List<ScoredMemory> ranked = new ArrayList<>();
+
             for (MemoryEntry entry : all) {
-                Set<String> entryWords = wordsOf(entry.value);
-                entryWords.retainAll(queryWords);
-                if (!entryWords.isEmpty()) scored.add(entry);
+                int score = relevanceScore(userText, entry);
+
+                if (score > 0) {
+                    ranked.add(new ScoredMemory(entry, score));
+                }
             }
 
-            List<MemoryEntry> chosen = scored.isEmpty()
-                    ? all.subList(0, Math.min(5, all.size()))
-                    : scored.subList(0, Math.min(5, scored.size()));
+            Collections.sort(ranked, (left, right) -> {
+                int scoreComparison = Integer.compare(right.score, left.score);
 
-            StringBuilder sb = new StringBuilder();
-            for (MemoryEntry entry : chosen) {
-                sb.append("- [").append(entry.category).append("] ")
-                        .append(entry.value).append("\n");
+                if (scoreComparison != 0) {
+                    return scoreComparison;
+                }
+
+                return Long.compare(right.entry.updatedAt, left.entry.updatedAt);
+            });
+
+            StringBuilder context = new StringBuilder();
+            int included = 0;
+            final int maxEntries = 6;
+            final int maxCharacters = 900;
+
+            for (ScoredMemory scored : ranked) {
+                String line = "- [" + scored.entry.category + "] "
+                        + scored.entry.value + "\n";
+
+                if (included >= maxEntries
+                        || context.length() + line.length() > maxCharacters) {
+                    break;
+                }
+
+                context.append(line);
+                included++;
             }
 
-            postResult(callback, sb.toString());
+            postResult(callback, context.toString());
         });
     }
 
@@ -121,7 +228,6 @@ public class MemoryManager {
             tryMatchUnique(P_PROJECT, userText, "PROJECT");
             tryMatchUnique(P_GOAL, userText, "GOAL");
             tryMatchUnique(P_HABIT, userText, "HABIT");
-            tryMatchUnique(P_REMEMBER, userText, "FACT");
         });
     }
 
@@ -138,7 +244,7 @@ public class MemoryManager {
         if (m.find()) {
             String value = safeGroup(m);
             if (!value.isEmpty()) {
-                remember(category, value.toLowerCase(Locale.getDefault()), value);
+                remember(category, stableKey(value), value);
             }
         }
     }
@@ -150,10 +256,110 @@ public class MemoryManager {
 
     private Set<String> wordsOf(String text) {
         Set<String> words = new HashSet<>();
-        for (String w : text.toLowerCase(Locale.getDefault()).split("[^a-z0-9]+")) {
-            if (w.length() > 2 && !STOPWORDS.contains(w)) words.add(w);
+
+        if (text == null) {
+            return words;
         }
+
+        for (String word : text.toLowerCase(Locale.ROOT)
+                .split("[^\\p{L}\\p{N}]+")) {
+            if (word.length() > 2 && !STOPWORDS.contains(word)) {
+                words.add(word);
+            }
+        }
+
         return words;
+    }
+    private static final class ScoredMemory {
+        final MemoryEntry entry;
+        final int score;
+
+        ScoredMemory(MemoryEntry entry, int score) {
+            this.entry = entry;
+            this.score = score;
+        }
+    }
+
+    private int relevanceScore(String userText, MemoryEntry entry) {
+        Set<String> queryWords = wordsOf(userText);
+        Set<String> memoryWords = wordsOf(entry.keyName + " " + entry.value);
+
+        memoryWords.retainAll(queryWords);
+
+        int score = memoryWords.size() * 20;
+        String query = userText == null ? "" : userText.toLowerCase(Locale.ROOT);
+
+        if ("NAME".equals(entry.category)
+                && (query.contains("my name") || query.contains("who am i"))) {
+            score += 100;
+        }
+
+        if (("INTEREST".equals(entry.category) || "DISLIKE".equals(entry.category))
+                && (query.contains("like")
+                || query.contains("love")
+                || query.contains("prefer")
+                || query.contains("favorite")
+                || query.contains("hate")
+                || query.contains("dislike"))) {
+            score += 40;
+        }
+
+        if (("PROJECT".equals(entry.category) || "GOAL".equals(entry.category))
+                && (query.contains("project")
+                || query.contains("goal")
+                || query.contains("building")
+                || query.contains("working on"))) {
+            score += 40;
+        }
+
+        long ageDays = Math.max(
+                0,
+                (System.currentTimeMillis() - entry.updatedAt)
+                        / (24L * 60L * 60L * 1000L));
+
+        score += Math.max(0, 5 - (int) ageDays);
+        return score;
+    }
+
+    private String formatMemoryList(List<MemoryEntry> memories) {
+        if (memories == null || memories.isEmpty()) {
+            return "I don't have any saved memories yet.";
+        }
+
+        StringBuilder reply = new StringBuilder("I remember: ");
+
+        int limit = Math.min(8, memories.size());
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                reply.append("; ");
+            }
+
+            reply.append(memories.get(i).value);
+        }
+
+        if (memories.size() > limit) {
+            reply.append(". There are also ")
+                    .append(memories.size() - limit)
+                    .append(" more memories.");
+        }
+
+        return reply.toString();
+    }
+
+    private String cleanValue(String value) {
+        return value == null
+                ? ""
+                : value.replaceAll("[.!?]+$", "").trim();
+    }
+
+    private String stableKey(String value) {
+        return cleanValue(value)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", " ");
+    }
+
+    private void postCommandResult(MemoryCommandCallback callback, String reply) {
+        mainHandler.post(() -> callback.onResult(reply));
     }
 
     private void postResult(MemoryCallback callback, String contextText) {

@@ -58,16 +58,23 @@ public class TimbyaEngine {
             new android.os.Handler(android.os.Looper.getMainLooper());
 
     public void process(String command, TimbyaListener listener) {
+        memoryManager.handleMemoryCommand(command, memoryReply -> {
+            if (memoryReply != null) {
+                listener.onReply(memoryReply);
+                return;
+            }
 
-        actionExecutorPool.execute(() -> {
-            ActionResult result = actionExecutor.execute(command);
+            actionExecutorPool.execute(() -> {
+                ActionResult result = actionExecutor.execute(command);
 
-            mainHandler.post(() -> {
-                if (result.isHandled()) {
-                    listener.onReply(result.getReply());
-                    return;
-                }
-                continueWithGemini(command, listener);
+                mainHandler.post(() -> {
+                    if (result.isHandled()) {
+                        listener.onReply(result.getReply());
+                        return;
+                    }
+
+                    continueWithGemini(command, listener);
+                });
             });
         });
     }

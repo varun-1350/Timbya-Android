@@ -22,6 +22,12 @@ public interface MemoryDao {
     @Query("DELETE FROM memory_entries WHERE category = :category AND keyName = :keyName")
     void delete(String category, String keyName);
 
+    @Query("DELETE FROM memory_entries WHERE keyName = :keyName")
+    void deleteByKeyName(String keyName);
+
+    @Query("DELETE FROM memory_entries")
+    void clearAll();
+
     /* @Query("DELETE FROM memory_entries")
     void clearAll(); */
 }
