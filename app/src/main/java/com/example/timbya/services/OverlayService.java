@@ -67,12 +67,17 @@ public class OverlayService extends Service {
             return;
         }
 
-        // MUST happen before anything touches the microphone: a background
-        // process (no visible Activity) is denied mic/audio-focus access on
-        // Android 9+. Promoting to a foreground service with a persistent
-        // notification is what makes SpeechManager's requestAudioFocus()
-        // actually succeed instead of looping forever.
-        startForeground(NOTIFICATION_ID, buildNotification());
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification());
+        } catch (Exception e) {
+            // Covers ForegroundServiceStartNotAllowedException (API 31+) and any
+            // other platform refusal to promote a background-triggered restart
+            // (e.g. from onTaskRemoved's AlarmManager kick) to a foreground
+            // service. Fail quiet instead of crash-looping the process.
+            Log.e(TAG, "startForeground() refused on restart — giving up for this cycle", e);
+            stopSelf();
+            return;
+        }
 
         speaker = new Speaker(this);
         speechManager = new SpeechManager(this);
@@ -309,13 +314,19 @@ public class OverlayService extends Service {
 
         super.onTaskRemoved(rootIntent);
     }
-
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (controller != null) controller.reclampToScreen();
+    }
     @Override
     public void onDestroy() {
         cancelSpeakingWatchdog();
-        controller.hide();
-        speaker.shutdown();
-        speechManager.destroy();
+
+        if (controller != null) controller.hide();
+        if (speaker != null) speaker.shutdown();
+        if (speechManager != null) speechManager.destroy();
+        if (engine != null) engine.shutdown();
         stopForeground(true);
         super.onDestroy();
     }

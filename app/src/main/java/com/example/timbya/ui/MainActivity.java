@@ -30,13 +30,32 @@ public class MainActivity extends AppCompatActivity {
                     new ActivityResultContracts.RequestPermission(),
                     granted -> {
                         if (granted) {
-                            launchOverlayAndFinish();
+                            requestExtraPermissionsAndLaunch();
                         } else {
                             Toast.makeText(this,
                                     "Microphone permission is required for Timbya",
                                     Toast.LENGTH_LONG).show();
                         }
                     });
+
+    // Contacts (WhatsApp voice messages) and media (voice "open <file>") are
+    // optional features, not launch-blocking — the app proceeds either way.
+    private final ActivityResultLauncher<String[]> extraPermissionsLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.RequestMultiplePermissions(),
+                    results -> launchOverlayAndFinish());
+
+    private static String[] extraPermissionsForThisDevice() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            return new String[]{
+                    Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO,
+                    Manifest.permission.READ_MEDIA_AUDIO
+            };
+        }
+        return new String[]{Manifest.permission.READ_CONTACTS};
+    }
 
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
             registerForActivityResult(
@@ -72,10 +91,14 @@ public class MainActivity extends AppCompatActivity {
     private void checkMicAndLaunch() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
-            launchOverlayAndFinish();
+            requestExtraPermissionsAndLaunch();
         } else {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
         }
+    }
+
+    private void requestExtraPermissionsAndLaunch() {
+        extraPermissionsLauncher.launch(extraPermissionsForThisDevice());
     }
 
     private void launchOverlayAndFinish() {

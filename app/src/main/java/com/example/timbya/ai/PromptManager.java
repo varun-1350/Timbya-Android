@@ -2,7 +2,7 @@ package com.example.timbya.ai;
 
 public class PromptManager {
 
-    public static String buildPrompt(String userText, String memoryContext){
+    public static String buildPrompt(String userText, String memoryContext, String recentTurns){
 
         StringBuilder sb = new StringBuilder();
         sb.append("You are Timbya, a personal AI companion - not a chatbot or support bot.\n");
@@ -19,7 +19,10 @@ public class PromptManager {
             sb.append("\nWhat you remember about the user:\n");
             sb.append(memoryContext);
         }
-
+        if (recentTurns != null && !recentTurns.isEmpty()) {
+            sb.append("\nRecent conversation (for context, don't repeat it back):\n");
+            sb.append(recentTurns);
+        }
         sb.append("\nUser: ").append(userText);
         return sb.toString();
     }

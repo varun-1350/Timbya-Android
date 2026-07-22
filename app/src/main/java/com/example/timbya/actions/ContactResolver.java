@@ -16,9 +16,13 @@ public class ContactResolver {
     }
 
     /** Returns the first matching phone number for a contact display name, or null. */
+    public boolean hasPermission() {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
     public String findPhoneNumber(String contactName) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
-                != PackageManager.PERMISSION_GRANTED) {
+        if (!hasPermission()) {
             return null;
         }
 

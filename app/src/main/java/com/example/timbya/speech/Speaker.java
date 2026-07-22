@@ -18,7 +18,7 @@ import java.util.Set;
 
 public class Speaker {
 
-    private static final String TAG = "TIMBYA_VOICE";
+    private static final String TAG = "TIMBYA_TTS";
 
     private TextToSpeech tts = null;
     private volatile boolean ttsReady = false;

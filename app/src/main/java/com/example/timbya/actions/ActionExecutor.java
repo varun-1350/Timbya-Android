@@ -159,6 +159,10 @@ public class ActionExecutor {
     }
 
     private ActionResult sendWhatsAppMessage(String contactName, String message) {
+        if (!contactResolver.hasPermission()) {
+            return new ActionResult(true,
+                    "I need contacts permission to do that — you can grant it from Timbya's app settings.");
+        }
         String phoneNumber = contactResolver.findPhoneNumber(contactName);
 
         if (phoneNumber == null) {

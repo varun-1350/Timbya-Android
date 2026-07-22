@@ -238,8 +238,22 @@ public class OverlayController {
     /** Drives the AI Core's visual state — the one new hook this redesign
      *  needs from OverlayService. */
     public void setAiState(TimbyaState state) {
-        if (aiCore != null) aiCore.setState(state);
-        if (aiCoreShrunk != null) aiCoreShrunk.setState(state);
+        // Only the visible one needs to actually animate. Keep the hidden one's
+        // logical state in sync (cheap) but don't let it run animators nobody sees.
+        if (shrunk) {
+            if (aiCoreShrunk != null) aiCoreShrunk.setState(state);
+            if (aiCore != null) aiCore.pause();
+        } else {
+            if (aiCore != null) aiCore.setState(state);
+            if (aiCoreShrunk != null) aiCoreShrunk.pause();
+        }
+    }
+    /** Re-clamps the bubble into the current screen bounds using its saved corner,
+     *  so a rotation or fold/unfold can't leave it off-screen or straddling an edge. */
+    public void reclampToScreen() {
+        if (!shrunk || overlayView == null || params == null) return;
+        bubbleX = Integer.MIN_VALUE; // force recompute from saved corner + new metrics
+        applyShrunkLayout(true);
     }
 
     public void setShrunk(boolean shrunk) {

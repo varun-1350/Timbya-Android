@@ -78,7 +78,8 @@ public class FileOpener {
         String mime = match.mimeType;
         if (mime == null || mime.isEmpty()) {
             String ext = MimeTypeMap.getFileExtensionFromUrl(match.displayName);
-            mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+            mime = MimeTypeMap.getSingleton()
+                    .getMimeTypeFromExtension(ext == null ? "" : ext.toLowerCase(java.util.Locale.ROOT));
         }
         intent.setDataAndType(match.toUri(), mime != null ? mime : "*/*");
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);

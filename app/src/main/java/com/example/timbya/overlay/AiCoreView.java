@@ -150,6 +150,21 @@ public class AiCoreView extends View {
         });
         coreAnimator.start();
     }
+    private float lastGlowRadius = -1f;
+    private float lastGlowCx = -1f, lastGlowCy = -1f;
+
+    private void updateGlowShaderIfNeeded(float cx, float cy, float radius) {
+        // Rebuild the shader only when geometry actually changed (radius pulses
+        // during animation, but cx/cy only change on layout) instead of every frame.
+        if (radius == lastGlowRadius && cx == lastGlowCx && cy == lastGlowCy) return;
+        lastGlowRadius = radius; lastGlowCx = cx; lastGlowCy = cy;
+        glowPaint.setShader(new RadialGradient(cx, cy, radius * 1.8f,
+                new int[]{ withAlpha(110), withAlpha(0) },
+                null, Shader.TileMode.CLAMP));
+    }
+    public void pause() {
+        stopAllAnimators();
+    }
 
     private void stopAllAnimators() {
         if (coreAnimator != null) coreAnimator.cancel();
@@ -193,9 +208,7 @@ public class AiCoreView extends View {
             canvas.drawArc(ringRect, ringRotation, 90f, false, ringPaint);
         }
 
-        glowPaint.setShader(new RadialGradient(cx, cy, radius * 1.8f,
-                new int[]{ withAlpha(110), withAlpha(0) },
-                null, Shader.TileMode.CLAMP));
+        updateGlowShaderIfNeeded(cx, cy, radius);
         canvas.drawCircle(cx, cy, radius * 1.8f, glowPaint);
 
         corePaint.setColor(state == CoreState.IDLE ? withAlpha(220) : ACCENT);

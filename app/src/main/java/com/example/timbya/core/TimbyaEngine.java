@@ -50,6 +50,10 @@ public class TimbyaEngine {
 
     private final java.util.concurrent.ExecutorService actionExecutorPool =
             java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    public void shutdown() {
+        actionExecutorPool.shutdownNow();
+    }
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -68,10 +72,21 @@ public class TimbyaEngine {
         });
     }
 
+    private static final int MAX_TURNS = 4; // last 4 exchanges, ~keeps prompt small
+    private final java.util.ArrayDeque<String> recentTurns = new java.util.ArrayDeque<>();
+
+    private void recordTurn(String user, String reply) {
+        recentTurns.addLast("User: " + user + "\nTimbya: " + reply);
+        while (recentTurns.size() > MAX_TURNS) recentTurns.pollFirst();
+    }
+
+    private String recentTurnsText() {
+        return String.join("\n", recentTurns);
+    }
     private void continueWithGemini(String command, TimbyaListener listener) {
         memoryManager.getRelevantMemories(command, memoryContext -> {
 
-            String prompt = PromptManager.buildPrompt(command, memoryContext);
+            String prompt = PromptManager.buildPrompt(command, memoryContext, recentTurnsText());
 
             geminiManager.askRaw(prompt, new Callback<>() {
 
@@ -88,6 +103,7 @@ public class TimbyaEngine {
                             return;
                         }
                         listener.onReply(reply);
+                        recordTurn(command, reply);
                         memoryManager.extractAndStore(command);
 
                     } else {
