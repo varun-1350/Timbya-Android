@@ -28,6 +28,7 @@ import com.example.timbya.speech.SpeechListener;
 import com.example.timbya.speech.SpeechManager;
 import com.example.timbya.ui.MainActivity;
 import com.example.timbya.utils.Constants;
+import com.example.timbya.ui.SettingsActivity;
 
 public class OverlayService extends Service {
 
@@ -103,7 +104,7 @@ public class OverlayService extends Service {
                 }
             }
             @Override public void onPartialResult(String partialText) {
-                if (Constants.SHOW_DEBUG_TEXT) {
+                if (Constants.showDebugText(OverlayService.this)) {
                     controller.setReply(partialText);
                 }
             }
@@ -147,12 +148,10 @@ public class OverlayService extends Service {
             }
 
             @Override
-            public void onPowerOff() {
-                cancelSpeakingWatchdog();
-                speechManager.stopListening();
-                speaker.stop();
-                setState(TimbyaState.OFF);
-                controller.setReply("");
+            public void onOpenSettings() {
+                Intent intent = new Intent(OverlayService.this, SettingsActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
             }
 
             @Override
@@ -164,7 +163,7 @@ public class OverlayService extends Service {
 
         controller.show();
 
-        controller.setShrunk(true);
+        controller.setShrunk(Constants.startMinimized(this));
 
         setState(TimbyaState.IDLE);
 
@@ -228,10 +227,12 @@ public class OverlayService extends Service {
         Log.d(TAG, "STATE -> " + newState);
 
         String label = newState.label();
-        if (newState == TimbyaState.LISTENING && !Constants.SHOW_LISTENING_LABEL) {
+        if (newState == TimbyaState.LISTENING
+                && !Constants.showListeningLabel(this)) {
             label = "";
         }
-        if (newState == TimbyaState.PROCESSING && !Constants.SHOW_AI_STATE) {
+        if (newState == TimbyaState.PROCESSING
+                && !Constants.showAiState(this)) {
             label = "";
         }
 

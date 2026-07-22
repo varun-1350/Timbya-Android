@@ -73,13 +73,13 @@
                 android:src="@android:drawable/arrow_down_float"/>
 
             <ImageButton
-                android:id="@+id/btnPowerOff"
+                android:id="@+id/btnSettings"
                 android:layout_width="@dimen/overlay_button_size"
                 android:layout_height="@dimen/overlay_button_size"
                 android:layout_marginStart="@dimen/overlay_button_gap"
                 android:background="@drawable/bg_button_ripple"
-                android:contentDescription="Power off"
-                android:src="@android:drawable/ic_lock_power_off"/>
+                android:contentDescription="Open Timbya settings"
+                android:src="@android:drawable/ic_menu_manage"/>
 
             <ImageButton
                 android:id="@+id/btnClose"

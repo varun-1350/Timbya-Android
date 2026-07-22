@@ -43,8 +43,8 @@ public class OverlayController {
     private TextView reply;
     private ImageButton mic;
     private ImageButton btnShrink;
-    private ImageButton btnClose;
-    private ImageButton btnPowerOff;
+    private ImageButton btnclose;
+    private ImageButton btnSettings;
 
     private boolean shrunk = false;
 
@@ -87,13 +87,22 @@ public class OverlayController {
         reply = overlayView.findViewById(R.id.reply);
         mic = overlayView.findViewById(R.id.mic);
         btnShrink = overlayView.findViewById(R.id.btnShrink);
-        btnClose = overlayView.findViewById(R.id.btnClose);
-        btnPowerOff = overlayView.findViewById(R.id.btnPowerOff);
+        btnSettings = overlayView.findViewById(R.id.btnSettings);
+        btnclose = overlayView.findViewById(R.id.btnClose);
 
-        mic.setOnClickListener(v -> { if (callbacks != null) callbacks.onMicToggle(); });
-        btnShrink.setOnClickListener(v -> { if (callbacks != null) callbacks.onShrinkToggle(); });
-        btnClose.setOnClickListener(v -> { if (callbacks != null) callbacks.onClose(); });
-        btnPowerOff.setOnClickListener(v -> { if (callbacks != null) callbacks.onPowerOff(); });
+        mic.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onMicToggle();
+        });
+        btnShrink.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onShrinkToggle();
+        });
+        btnSettings.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onOpenSettings();
+        });
+        btnclose.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onClose();
+        });
+
 
         bubble.setOnTouchListener(this::onBubbleTouch);
 
@@ -210,7 +219,7 @@ public class OverlayController {
 
     public void setStatus(String text) {
         if (status == null) return;
-        if (!Constants.SHOW_STATUS_TEXT || text == null || text.isEmpty()) {
+        if (!Constants.showStatusText(context) || text == null || text.isEmpty()) {
             status.setVisibility(View.GONE);
             return;
         }
@@ -222,7 +231,7 @@ public class OverlayController {
      *  orb + one-word status are the UI otherwise. */
     public void setReply(String text) {
         if (reply == null) return;
-        if (!Constants.SHOW_DEBUG_TEXT || text == null || text.isEmpty()) {
+        if (!Constants.showDebugText(context) || text == null || text.isEmpty()) {
             reply.setVisibility(View.GONE);
             return;
         }
@@ -341,6 +350,6 @@ public class OverlayController {
         overlayView = null; panelContainer = null; bubble = null;
         aiCore = null; aiCoreShrunk = null;
         status = null; reply = null; mic = null;
-        btnShrink = null; btnClose = null; btnPowerOff = null; params = null;
+        btnShrink = null; btnclose = null; btnSettings = null; params = null;
     }
 }
