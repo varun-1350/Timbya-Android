@@ -20,12 +20,24 @@ public class ActionExecutor {
 
 
     private static final Pattern WHATSAPP_PATTERN = Pattern.compile(
-            "message\\s+(.+?)\\s+to\\s+(.+?)\\s+on\\s+whatsapp", Pattern.CASE_INSENSITIVE);
+            "^(?:send|message|text)(?:\\s+a)?\\s+(?:whatsapp\\s+)?(?:message\\s+)?"
+                    + "(.+?)\\s+(?:to|for)\\s+(.+?)"
+                    + "(?:\\s+(?:on|via|using)\\s+whatsapp)?\\s*[.!?]*$",
+            Pattern.CASE_INSENSITIVE);
+
     private static final Pattern YOUTUBE_SUFFIX_PATTERN = Pattern.compile(
-            "(?:search|play)\\s+(.+?)\\s+(?:on|in)\\s+youtube", Pattern.CASE_INSENSITIVE);
+            "^(?:search(?:\\s+for)?|find|look\\s+up|play|show\\s+me)\\s+(.+?)"
+                    + "\\s+(?:on|in|from)\\s+(?:youtube|you\\s*tube)\\s*[.!?]*$",
+            Pattern.CASE_INSENSITIVE);
 
     private static final Pattern YOUTUBE_PREFIX_PATTERN = Pattern.compile(
-            "open youtube and search\\s+(.+)", Pattern.CASE_INSENSITIVE);
+            "^(?:open\\s+)?(?:youtube|you\\s*tube)\\s+(?:and\\s+)?"
+                    + "(?:search(?:\\s+for)?|find|look\\s+up|play|show\\s+me)\\s+(.+?)\\s*[.!?]*$",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern YOUTUBE_OPEN_PATTERN = Pattern.compile(
+            "^(?:open|launch|start)(?:\\s+the)?\\s+(?:youtube|you\\s*tube)\\s*[.!?]*$",
+            Pattern.CASE_INSENSITIVE);
 
     public ActionExecutor(Context context) {
         this.context = context.getApplicationContext();
@@ -66,20 +78,28 @@ public class ActionExecutor {
             if (resolved != null) return resolved;
         }
         // WhatsApp: match against the ORIGINAL text so the message keeps its casing.
-        Matcher m = WHATSAPP_PATTERN.matcher(originalCommand.trim());
-        if (m.find()) {
-            String message = safeGroup(m, 1);
-            String contactName = safeGroup(m, 2);
+        String voiceCommand = originalCommand.trim();
+
+// Match the original transcription so the outgoing message keeps its casing.
+        Matcher whatsappMatcher = WHATSAPP_PATTERN.matcher(voiceCommand);
+        if (whatsappMatcher.matches()) {
+            String message = safeGroup(whatsappMatcher, 1);
+            String contactName = safeGroup(whatsappMatcher, 2);
             return sendWhatsAppMessage(contactName, message);
         }
-        Matcher yPrefix = YOUTUBE_PREFIX_PATTERN.matcher(originalCommand.trim());
-        if (yPrefix.find()) {
-            return searchYouTube(safeGroup(yPrefix, 1));
+
+        Matcher youtubePrefixMatcher = YOUTUBE_PREFIX_PATTERN.matcher(voiceCommand);
+        if (youtubePrefixMatcher.matches()) {
+            return searchYouTube(safeGroup(youtubePrefixMatcher, 1));
         }
 
-        Matcher ySuffix = YOUTUBE_SUFFIX_PATTERN.matcher(originalCommand.trim());
-        if (ySuffix.find()) {
-            return searchYouTube(safeGroup(ySuffix, 1));
+        Matcher youtubeSuffixMatcher = YOUTUBE_SUFFIX_PATTERN.matcher(voiceCommand);
+        if (youtubeSuffixMatcher.matches()) {
+            return searchYouTube(safeGroup(youtubeSuffixMatcher, 1));
+        }
+
+        if (YOUTUBE_OPEN_PATTERN.matcher(voiceCommand).matches()) {
+            return openYouTube();
         }
 
         String command = originalCommand.toLowerCase().trim();
@@ -107,6 +127,27 @@ public class ActionExecutor {
         }
 
         return new ActionResult(false, "");
+    }
+    private ActionResult openYouTube() {
+        try {
+            Intent launchIntent = context.getPackageManager()
+                    .getLaunchIntentForPackage("com.google.android.youtube");
+
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(launchIntent);
+                return new ActionResult(true, "Opening YouTube");
+            }
+
+            Intent browserIntent = new Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://www.youtube.com"));
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(browserIntent);
+            return new ActionResult(true, "YouTube isn't installed, opening it in your browser");
+        } catch (Exception e) {
+            return new ActionResult(true, "I couldn't open YouTube.");
+        }
     }
     private boolean looksLikeFileName(String text) {
         return text.matches(".*\\.[a-zA-Z0-9]{2,5}$");
