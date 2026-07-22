@@ -79,7 +79,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void launchOverlayAndFinish() {
-        startService(new Intent(this, OverlayService.class));
+        Intent intent = new Intent(this, OverlayService.class);
+        intent.setAction(OverlayService.ACTION_SHOW);
+        ContextCompat.startForegroundService(this, intent);
+
         finish();
         overridePendingTransition(0, 0);
     }

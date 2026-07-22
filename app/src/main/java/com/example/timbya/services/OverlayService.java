@@ -284,11 +284,38 @@ public class OverlayService extends Service {
     public IBinder onBind(Intent intent) { return null; }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // HyperOS/MIUI frequently kill this process on task-swipe regardless
+        // of foreground-service status — this is a real OEM behavior no
+        // in-app fix fully prevents. Best available mitigation: schedule a
+        // near-immediate restart so the service comes back on its own rather
+        // than staying dead silently.
+        Log.w(TAG, "onTaskRemoved: scheduling restart in case the OS kills this process");
+
+        android.app.AlarmManager alarmManager =
+                (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+        if (alarmManager != null) {
+            Intent restartIntent = new Intent(this, OverlayService.class);
+            restartIntent.setAction(ACTION_SHOW);
+            PendingIntent pendingIntent = PendingIntent.getService(
+                    this, 0, restartIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            alarmManager.set(
+                    android.app.AlarmManager.RTC,
+                    System.currentTimeMillis() + 1000,
+                    pendingIntent);
+        }
+
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onDestroy() {
         cancelSpeakingWatchdog();
-        if (controller != null) controller.hide();
-        if (speaker != null) speaker.shutdown();
-        if (speechManager != null) speechManager.destroy();
+        controller.hide();
+        speaker.shutdown();
+        speechManager.destroy();
         stopForeground(true);
         super.onDestroy();
     }

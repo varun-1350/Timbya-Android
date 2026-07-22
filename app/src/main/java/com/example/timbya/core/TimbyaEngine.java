@@ -48,15 +48,27 @@ public class TimbyaEngine {
         }
     }
 
+    private final java.util.concurrent.ExecutorService actionExecutorPool =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final android.os.Handler mainHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
     public void process(String command, TimbyaListener listener) {
 
-        ActionResult result = actionExecutor.execute(command);
+        actionExecutorPool.execute(() -> {
+            ActionResult result = actionExecutor.execute(command);
 
-        if (result.isHandled()) {
-            listener.onReply(result.getReply());
-            return;
-        }
+            mainHandler.post(() -> {
+                if (result.isHandled()) {
+                    listener.onReply(result.getReply());
+                    return;
+                }
+                continueWithGemini(command, listener);
+            });
+        });
+    }
 
+    private void continueWithGemini(String command, TimbyaListener listener) {
         memoryManager.getRelevantMemories(command, memoryContext -> {
 
             String prompt = PromptManager.buildPrompt(command, memoryContext);
