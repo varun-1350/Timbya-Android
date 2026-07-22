@@ -30,6 +30,8 @@ import com.example.timbya.ui.MainActivity;
 import com.example.timbya.utils.Constants;
 import com.example.timbya.ui.SettingsActivity;
 import android.provider.Settings;
+import com.example.timbya.actions.ActionResult;
+import com.example.timbya.focus.FocusManager;
 
 import com.example.timbya.services.ScreenReadingAccessibilityService;
 
@@ -44,6 +46,8 @@ public class OverlayService extends Service {
 
     private static final String NOTIFICATION_CHANNEL_ID = "timbya_listening";
     private static final int NOTIFICATION_ID = 1001;
+    private ActionExecutor actionExecutor;
+    private FocusManager focusManager;
 
     private OverlayController controller;
     private Speaker speaker;
@@ -89,9 +93,15 @@ public class OverlayService extends Service {
         speechManager = new SpeechManager(this);
         MemoryManager memoryManager = new MemoryManager(this);
         GeminiManager geminiManager = new GeminiManager();
-        ActionExecutor actionExecutor = new ActionExecutor(this);
+        actionExecutor = new ActionExecutor(this);
+
+        focusManager = new FocusManager(
+                this,
+                message -> mainHandler.post(() -> speakFocusNudge(message)));
 
         engine = new TimbyaEngine(actionExecutor, geminiManager, memoryManager);
+
+
 
         speechListener = new SpeechListener() {
             @Override public void onSpeechResult(String text) {
@@ -162,6 +172,13 @@ public class OverlayService extends Service {
             public void onReadScreen() {
                 readAndSummarizeCurrentScreen();
             }
+            @Override
+            public void onUndoAction() {
+                ActionResult result = actionExecutor.undoLastAction();
+
+                controller.setUndoAvailable(false);
+                speakFocusNudge(result.getReply());
+            }
 
 
             @Override
@@ -180,6 +197,7 @@ public class OverlayService extends Service {
 
 
     }
+
 
 
     private void readAndSummarizeCurrentScreen() {
@@ -249,8 +267,30 @@ public class OverlayService extends Service {
         }
         return START_STICKY;
     }
+    private void refreshUndoButton() {
+        if (actionExecutor == null || controller == null) {
+            return;
+        }
+
+        controller.setUndoAvailable(actionExecutor.hasUndoAvailable());
+
+        mainHandler.postDelayed(
+                () -> {
+                    if (actionExecutor != null && controller != null) {
+                        controller.setUndoAvailable(
+                                actionExecutor.hasUndoAvailable());
+                    }
+                },
+                ActionExecutor.UNDO_WINDOW_MS);
+    }
 
     public void onSpeechResult(String text) {
+        ActionResult focusResult = focusManager.handleVoiceCommand(text);
+
+        if (focusResult.isHandled()) {
+            speakFocusNudge(focusResult.getReply());
+            return;
+        }
 
         resumeHandled = false;
         cancelSpeakingWatchdog();
@@ -265,6 +305,7 @@ public class OverlayService extends Service {
 
                 speechManager.mute();
                 armSpeakingWatchdog(reply);
+                refreshUndoButton();
 
                 speaker.say(reply, () -> resumeOnce("tts-done"));
             }
@@ -276,10 +317,28 @@ public class OverlayService extends Service {
 
                 speechManager.mute();
                 armSpeakingWatchdog(error);
+                refreshUndoButton();
 
                 speaker.say(error, () -> resumeOnce("tts-error-done"));
             }
         });
+    }
+    private void speakFocusNudge(String reply) {
+        if (state == TimbyaState.SPEAKING
+                || state == TimbyaState.PROCESSING) {
+            return;
+        }
+
+        resumeHandled = false;
+        cancelSpeakingWatchdog();
+
+        controller.setReply(reply);
+        setState(TimbyaState.SPEAKING);
+
+        speechManager.mute();
+        armSpeakingWatchdog(reply);
+
+        speaker.say(reply, () -> resumeOnce("focus-mode"));
     }
 
     private void resumeOnce(String source) {
@@ -410,6 +469,9 @@ public class OverlayService extends Service {
     }
     @Override
     public void onDestroy() {
+        if (focusManager != null) {
+            focusManager.stop();
+        }
         cancelSpeakingWatchdog();
 
         if (controller != null) controller.hide();

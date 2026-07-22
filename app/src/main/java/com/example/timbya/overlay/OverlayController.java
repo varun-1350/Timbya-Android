@@ -58,17 +58,35 @@ public class OverlayController {
     private static final int CORNER_TL = 1;
     private static final int CORNER_BR = 2;
     private static final int CORNER_BL = 3;
+    private ImageButton btnUndo;
+    private boolean undoAvailable = false;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener
             settingsChangeListener = (preferences, key) -> {
         if (Constants.SHOW_READ_SCREEN_BUTTON.equals(key)) {
             updateReadScreenVisibility();
+        } else if (Constants.SHOW_UNDO_BUTTON.equals(key)) {
+            updateUndoVisibility();
         }
     };
 
     private float touchStartRawX, touchStartRawY;
     private int paramsStartX, paramsStartY;
     private boolean isDragging = false;
+    private void updateUndoVisibility() {
+        if (btnUndo == null) {
+            return;
+        }
 
+        boolean shouldShow = undoAvailable
+                && Constants.showUndoButton(context);
+
+        btnUndo.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
+    }
+
+    public void setUndoAvailable(boolean available) {
+        undoAvailable = available;
+        updateUndoVisibility();
+    }
     public OverlayController(Context context, OverlayCallbacks callbacks) {
         this.context = context;
         this.callbacks = callbacks;
@@ -88,12 +106,6 @@ public class OverlayController {
     public void show() {
         if (overlayView != null) return;
 
-        // Pass a throwaway FrameLayout as the inflation root (attachToRoot=false)
-        // so the inflater can resolve overlay_layout.xml's root-level
-        // layout_width/layout_height/margin attributes correctly, without
-        // actually attaching the result to that FrameLayout — it's just
-        // there to give LayoutParams something to resolve against, since
-        // WindowManager (not a ViewGroup) is the real eventual parent.
         ViewGroup inflationRoot = new FrameLayout(context);
         overlayView = LayoutInflater.from(context).inflate(R.layout.overlay_layout, inflationRoot, false);
 
@@ -108,6 +120,7 @@ public class OverlayController {
         btnReadScreen = overlayView.findViewById(R.id.btnReadScreen);
         btnSettings = overlayView.findViewById(R.id.btnSettings);
         btnclose = overlayView.findViewById(R.id.btnClose);
+        btnUndo = overlayView.findViewById(R.id.btnUndo);
 
 
         mic.setOnClickListener(v -> {
@@ -117,6 +130,7 @@ public class OverlayController {
             if (callbacks != null) callbacks.onShrinkToggle();
         });
         btnSettings.setOnClickListener(v -> {
+
             if (callbacks != null) callbacks.onOpenSettings();
         });
         btnclose.setOnClickListener(v -> {
@@ -124,6 +138,9 @@ public class OverlayController {
         });
         btnReadScreen.setOnClickListener(v -> {
             if (callbacks != null) callbacks.onReadScreen();
+        });
+        btnUndo.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onUndoAction();
         });
         settingsPreferences = context.getSharedPreferences(
                 Constants.PREFS_NAME,
@@ -133,6 +150,7 @@ public class OverlayController {
                 settingsChangeListener);
 
         updateReadScreenVisibility();
+        updateUndoVisibility();
 
 
         bubble.setOnTouchListener(this::onBubbleTouch);
@@ -387,5 +405,7 @@ public class OverlayController {
         aiCore = null; aiCoreShrunk = null;
         status = null; reply = null; mic = null;
         btnShrink = null; btnclose = null; btnSettings = null; params = null;btnReadScreen = null;
+        btnUndo = null;
+        undoAvailable = false;
     }
 }

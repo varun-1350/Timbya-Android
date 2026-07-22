@@ -14,11 +14,23 @@ import java.util.List;
 import java.util.Set;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.os.Handler;
+import android.os.Looper;
 
 public class ScreenReadingAccessibilityService extends AccessibilityService {
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static volatile FocusEventListener focusEventListener;
+    public static void setFocusEventListener(FocusEventListener listener) {
+        focusEventListener = listener;
+    }
 
     public interface ScreenReadCallback {
         void onScreenRead(String text);
+    }
+    public boolean goBack() {
+        mainHandler.post(() ->
+                performGlobalAction(GLOBAL_ACTION_BACK));
+        return true;
     }
 
     private static volatile ScreenReadingAccessibilityService instance;
@@ -35,8 +47,69 @@ public class ScreenReadingAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // Intentionally empty.
-        // Timbya never reads screen content from accessibility events.
+        FocusEventListener listener = focusEventListener;
+
+        if (listener == null || event.getPackageName() == null) {
+            return;
+        }
+
+        int eventType = event.getEventType();
+
+        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                && eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                && eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+            return;
+        }
+
+        String packageName = event.getPackageName().toString();
+        String className = event.getClassName() == null
+                ? ""
+                : event.getClassName().toString();
+
+        boolean isShorts = "com.google.android.youtube".equals(packageName)
+                && containsShortsPlayer(event.getSource());
+
+        listener.onForegroundContentChanged(packageName, className, isShorts);
+    }
+    private boolean containsShortsPlayer(AccessibilityNodeInfo node) {
+        if (node == null) {
+            return false;
+        }
+
+        try {
+            String viewId = node.getViewIdResourceName();
+            String className = node.getClassName() == null
+                    ? ""
+                    : node.getClassName().toString();
+
+            String signal = (viewId == null ? "" : viewId)
+                    + " "
+                    + className;
+
+            signal = signal.toLowerCase(java.util.Locale.ROOT);
+
+            if (signal.contains("shorts") || signal.contains("reel")) {
+                return true;
+            }
+
+            for (int index = 0; index < node.getChildCount(); index++) {
+                AccessibilityNodeInfo child = node.getChild(index);
+
+                if (child != null) {
+                    try {
+                        if (containsShortsPlayer(child)) {
+                            return true;
+                        }
+                    } finally {
+                        child.recycle();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // YouTube can replace its view hierarchy during navigation.
+        }
+
+        return false;
     }
 
     @Override
@@ -82,6 +155,12 @@ public class ScreenReadingAccessibilityService extends AccessibilityService {
 
     public static ScreenReadingAccessibilityService getInstance() {
         return instance;
+    }
+    public interface FocusEventListener {
+        void onForegroundContentChanged(
+                String packageName,
+                String className,
+                boolean isYouTubeShorts);
     }
 
     public void readCurrentScreen(ScreenReadCallback callback) {

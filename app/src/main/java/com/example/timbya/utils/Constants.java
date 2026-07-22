@@ -10,6 +10,10 @@ public class Constants {
     public static final String SHOW_DEBUG_TEXT = "show_debug_text";
     public static final String START_MINIMIZED = "start_minimized";
     public static final String SHOW_READ_SCREEN_BUTTON = "show_read_screen_button";
+    public static final String SHOW_UNDO_BUTTON = "show_undo_button";
+    public static boolean showUndoButton(android.content.Context context) {
+        return getBoolean(context, SHOW_UNDO_BUTTON, true);
+    }
 
     private static boolean getBoolean(android.content.Context context,
                                       String key,

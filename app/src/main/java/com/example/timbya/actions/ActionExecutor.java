@@ -10,6 +10,7 @@ import android.provider.Settings;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.example.timbya.services.ScreenReadingAccessibilityService;
 
 public class ActionExecutor {
 
@@ -17,6 +18,8 @@ public class ActionExecutor {
     private final ContactResolver contactResolver;
     FileOpener fileOpener;
     private List<FileOpener.FileMatch> pendingFileMatches;
+    public static final long UNDO_WINDOW_MS = 12_000L;
+    private long undoExpiresAt = 0L;
 
 
     private static final Pattern WHATSAPP_PATTERN = Pattern.compile(
@@ -52,17 +55,49 @@ public class ActionExecutor {
             appIntent.setPackage("com.google.android.youtube");
             appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(appIntent);
-            return new ActionResult(true, "Searching YouTube for " + query);
+            return completedExternalAction("Searching YouTube for " + query);
         } catch (Exception e) {
             try {
                 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(browserIntent);
-                return new ActionResult(true, "YouTube app isn't installed, searching in your browser instead");
+                return completedExternalAction( "YouTube app isn't installed, searching in your browser instead");
             } catch (Exception e2) {
-                return new ActionResult(true, "I couldn't open YouTube.");
+                return completedExternalAction( "I couldn't open YouTube.");
             }
         }
+    }
+    private synchronized ActionResult completedExternalAction(String reply) {
+        undoExpiresAt = System.currentTimeMillis() + UNDO_WINDOW_MS;
+        return completedExternalAction( reply);
+    }
+
+    public synchronized boolean hasUndoAvailable() {
+        return System.currentTimeMillis() < undoExpiresAt
+                && ScreenReadingAccessibilityService.getInstance() != null;
+    }
+
+    public synchronized ActionResult undoLastAction() {
+        if (!hasUndoAvailable()) {
+            return new ActionResult(
+                    true,
+                    "There is no recent voice action to undo.");
+        }
+
+        ScreenReadingAccessibilityService service =
+                ScreenReadingAccessibilityService.getInstance();
+
+        undoExpiresAt = 0L;
+
+        if (service == null || !service.goBack()) {
+            return new ActionResult(
+                    true,
+                    "I couldn't undo that action.");
+        }
+
+        return new ActionResult(
+                true,
+                "Undid the last voice action.");
     }
     /** All our patterns' group 1/2 are mandatory (no '?' quantifier), so a match
      *  guarantees a non-null group — this just makes that explicit for the analyzer
@@ -123,7 +158,7 @@ public class ActionExecutor {
             Intent intent = new Intent(Settings.ACTION_SETTINGS);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
-            return new ActionResult(true, "Opening Settings");
+            return completedExternalAction( "Opening Settings");
         }
 
         return new ActionResult(false, "");
@@ -136,7 +171,7 @@ public class ActionExecutor {
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(launchIntent);
-                return new ActionResult(true, "Opening YouTube");
+                return completedExternalAction( "Opening YouTube");
             }
 
             Intent browserIntent = new Intent(
@@ -144,9 +179,9 @@ public class ActionExecutor {
                     Uri.parse("https://www.youtube.com"));
             browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(browserIntent);
-            return new ActionResult(true, "YouTube isn't installed, opening it in your browser");
+            return completedExternalAction( "YouTube isn't installed, opening it in your browser");
         } catch (Exception e) {
-            return new ActionResult(true, "I couldn't open YouTube.");
+            return completedExternalAction( "I couldn't open YouTube.");
         }
     }
     private boolean looksLikeFileName(String text) {
@@ -157,12 +192,12 @@ public class ActionExecutor {
         List<FileOpener.FileMatch> matches = fileOpener.search(fileName);
 
         if (matches.isEmpty()) {
-            return new ActionResult(true, "I couldn't find a file named " + fileName + " on this device.");
+            return completedExternalAction( "I couldn't find a file named " + fileName + " on this device.");
         }
 
         if (matches.size() == 1) {
             fileOpener.open(matches.get(0));
-            return new ActionResult(true, "Opening " + matches.get(0).displayName);
+            return completedExternalAction( "Opening " + matches.get(0).displayName);
         }
 
         pendingFileMatches = matches;
@@ -170,7 +205,7 @@ public class ActionExecutor {
         for (int i = 0; i < matches.size(); i++) {
             sb.append(i + 1).append(") ").append(matches.get(i).relativePath).append(" ");
         }
-        return new ActionResult(true, sb.toString().trim());
+        return completedExternalAction( sb.toString().trim());
     }
 
     private ActionResult resolvePendingFileChoice(String originalCommand) {
@@ -184,7 +219,7 @@ public class ActionExecutor {
         FileOpener.FileMatch chosen = pendingFileMatches.get(choice - 1);
         pendingFileMatches = null;
         fileOpener.open(chosen);
-        return new ActionResult(true, "Opening " + chosen.displayName);
+        return completedExternalAction( "Opening " + chosen.displayName);
     }
 
     private Integer parseOrdinal(String text) {
@@ -201,13 +236,13 @@ public class ActionExecutor {
 
     private ActionResult sendWhatsAppMessage(String contactName, String message) {
         if (!contactResolver.hasPermission()) {
-            return new ActionResult(true,
+            return completedExternalAction(
                     "I need contacts permission to do that — you can grant it from Timbya's app settings.");
         }
         String phoneNumber = contactResolver.findPhoneNumber(contactName);
 
         if (phoneNumber == null) {
-            return new ActionResult(true,
+            return completedExternalAction(
                     "I couldn't find " + contactName + " in your contacts.");
         }
 
@@ -218,10 +253,10 @@ public class ActionExecutor {
             intent.setPackage("com.whatsapp");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
-            return new ActionResult(true,
+            return completedExternalAction(
                     "Opened WhatsApp with your message to " + contactName + " ready — just tap send.");
         } catch (Exception e) {
-            return new ActionResult(true, "WhatsApp doesn't seem to be installed.");
+            return completedExternalAction( "WhatsApp doesn't seem to be installed.");
         }
     }
 
@@ -239,7 +274,7 @@ public class ActionExecutor {
 
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(launchIntent);
-        return new ActionResult(true, "Opening " + chosen.loadLabel(pm));
+        return completedExternalAction( "Opening " + chosen.loadLabel(pm));
     }
 
     private ActionResult openAppByName(String appName) {
@@ -257,10 +292,10 @@ public class ActionExecutor {
                 if (launchIntent != null) {
                     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     context.startActivity(launchIntent);
-                    return new ActionResult(true, "Opening " + label);
+                    return completedExternalAction( "Opening " + label);
                 }
             }
         }
-        return new ActionResult(true, appName + " not found");
+        return completedExternalAction( appName + " not found");
     }
 }

@@ -64,6 +64,12 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Show Read Screen button" />
+        <Switch
+            android:id="@+id/switchUndo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Show Undo button for voice actions" />
 
     </LinearLayout>
 </ScrollView>

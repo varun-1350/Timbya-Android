@@ -6,4 +6,5 @@ public interface OverlayCallbacks {
     void onOpenSettings();
     void onClose();
     void onReadScreen();
+    void onUndoAction();
 }

@@ -87,6 +87,16 @@
                     android:background="@drawable/bg_button_ripple"
                     android:contentDescription="Open Timbya settings"
                     android:src="@android:drawable/ic_menu_manage" />
+
+                <ImageButton
+                    android:id="@+id/btnUndo"
+                    android:layout_width="@dimen/overlay_button_size"
+                    android:layout_height="@dimen/overlay_button_size"
+                    android:layout_marginStart="@dimen/overlay_button_gap"
+                    android:background="@drawable/bg_button_ripple"
+                    android:contentDescription="Undo last voice action"
+                    android:src="@android:drawable/ic_menu_revert"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
 
