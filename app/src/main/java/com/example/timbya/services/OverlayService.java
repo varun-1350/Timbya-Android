@@ -37,7 +37,8 @@ public class OverlayService extends Service {
     private boolean listenAfterScreenSummary = false;
 
     private static final String TAG = "TIMBYA_OVERLAY";
-    private static final long SPEAKING_WATCHDOG_MS = 10_000L;
+    private static final long MIN_SPEAKING_WATCHDOG_MS = 15_000L;
+    private static final long MAX_SPEAKING_WATCHDOG_MS = 90_000L;
 
     public static final String ACTION_SHOW = "com.example.timbya.action.SHOW_OVERLAY";
 
@@ -234,7 +235,7 @@ public class OverlayService extends Service {
         setState(TimbyaState.SPEAKING);
 
         speechManager.mute();
-        armSpeakingWatchdog();
+        armSpeakingWatchdog(reply);
 
         speaker.say(reply, () -> resumeOnce("screen-summary-done"));
     }
@@ -263,7 +264,7 @@ public class OverlayService extends Service {
                 setState(TimbyaState.SPEAKING);
 
                 speechManager.mute();
-                armSpeakingWatchdog();
+                armSpeakingWatchdog(reply);
 
                 speaker.say(reply, () -> resumeOnce("tts-done"));
             }
@@ -274,7 +275,7 @@ public class OverlayService extends Service {
                 setState(TimbyaState.SPEAKING);
 
                 speechManager.mute();
-                armSpeakingWatchdog();
+                armSpeakingWatchdog(error);
 
                 speaker.say(error, () -> resumeOnce("tts-error-done"));
             }
@@ -318,16 +319,26 @@ public class OverlayService extends Service {
         controller.setAiState(newState);
     }
 
-    private void armSpeakingWatchdog() {
+    private void armSpeakingWatchdog(String spokenText) {
         cancelSpeakingWatchdog();
+
+        int characterCount = spokenText == null ? 0 : spokenText.length();
+
+        long estimatedSpeechTimeMs = 4_000L + (characterCount * 85L);
+
+        long watchdogDelayMs = Math.max(
+                MIN_SPEAKING_WATCHDOG_MS,
+                Math.min(MAX_SPEAKING_WATCHDOG_MS, estimatedSpeechTimeMs));
+
         speakingWatchdog = () -> {
             if (state == TimbyaState.SPEAKING) {
-                Log.e(TAG, "WATCHDOG: stuck in SPEAKING, forcing reset to LISTENING");
+                Log.e(TAG, "WATCHDOG: TTS did not finish in time, forcing reset");
                 speaker.stop();
                 resumeOnce("watchdog");
             }
         };
-        mainHandler.postDelayed(speakingWatchdog, SPEAKING_WATCHDOG_MS);
+
+        mainHandler.postDelayed(speakingWatchdog, watchdogDelayMs);
     }
 
     private void cancelSpeakingWatchdog() {

@@ -30,7 +30,7 @@ public class Speaker {
     private static final float BASE_RATE = 0.90f;
     private static final float BASE_PITCH = 0.85f;
 
-    private Locale currentLocale = LanguageSegmenter.ENGLISH;
+    private Locale currentLocale = null;
     private final Set<Locale> warnedUnavailableLocales = new HashSet<>();
     // Belt-and-suspenders alongside setAudioAttributes(): some engines still
     // honor the legacy per-utterance Bundle param over the AudioAttributes
@@ -134,8 +134,8 @@ public class Speaker {
         for (String sentence : sentences) {
             float rateJitter = (random.nextFloat() - 0.5f) * 0.08f;
             float pitchJitter = (random.nextFloat() - 0.5f) * 0.06f;
-            float rate = BASE_RATE + rateJitter;
-            float pitch = BASE_PITCH + pitchJitter;
+            float rate = BASE_RATE ;
+            float pitch = BASE_PITCH ;
             boolean looksImportant = sentence.matches(".*\\d.*") || sentence.split("\\s+").length <= 5;
             if (looksImportant) rate -= 0.05f;
             rate = Math.max(0.75f, rate);
@@ -233,41 +233,68 @@ public class Speaker {
         currentLocale = LanguageSegmenter.ENGLISH;
     }
 
-    /** Picks the best installed, offline-capable voice for a locale:
-     *  exact locale match preferred, same-language-any-country as a second
-     *  choice. Skips voices that require a network connection (avoids
-     *  silent failures/latency mid-conversation) and voices whose data
-     *  isn't actually downloaded yet. Returns null (never throws) if the
-     *  engine's voice list is unavailable or nothing usable is found —
-     *  callers must handle null as "fall back to English." */
     private Voice findBestVoice(Locale locale) {
-        if (tts == null) return null;
+        if (tts == null) {
+            return null;
+        }
+
         Set<Voice> voices;
+
         try {
             voices = tts.getVoices();
         } catch (Exception e) {
             Log.w(TAG, "getVoices() failed", e);
             return null;
         }
-        if (voices == null) return null;
 
-        Voice languageMatch = null;
-        for (Voice v : voices) {
-            if (v == null || v.getLocale() == null) continue;
-            if (v.isNetworkConnectionRequired()) continue;
-            if (v.getFeatures() != null
-                    && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+        if (voices == null) {
+            return null;
+        }
 
-            if (v.getLocale().equals(locale)) {
-                return v; // exact match, best possible — stop looking
+        Voice bestExactMatch = null;
+        Voice bestLanguageMatch = null;
+
+        for (Voice voice : voices) {
+            if (voice == null || voice.getLocale() == null) {
+                continue;
             }
-            if (languageMatch == null && v.getLocale().getLanguage().equals(locale.getLanguage())) {
-                languageMatch = v;
+
+            if (voice.isNetworkConnectionRequired()) {
+                continue;
+            }
+
+            if (voice.getFeatures() != null
+                    && voice.getFeatures().contains(
+                    TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
+                continue;
+            }
+
+            if (voice.getLocale().equals(locale)) {
+                bestExactMatch = chooseBetterVoice(bestExactMatch, voice);
+            } else if (voice.getLocale().getLanguage()
+                    .equals(locale.getLanguage())) {
+                bestLanguageMatch = chooseBetterVoice(bestLanguageMatch, voice);
             }
         }
-        return languageMatch;
-    }
 
+        return bestExactMatch != null ? bestExactMatch : bestLanguageMatch;
+    }
+    private Voice chooseBetterVoice(Voice current, Voice candidate) {
+        if (current == null) {
+            return candidate;
+        }
+
+        if (candidate.getQuality() > current.getQuality()) {
+            return candidate;
+        }
+
+        if (candidate.getQuality() == current.getQuality()
+                && candidate.getLatency() < current.getLatency()) {
+            return candidate;
+        }
+
+        return current;
+    }
     private long pauseAfter(String sentence) {
         char last = sentence.charAt(sentence.length() - 1);
         long base;
