@@ -9,12 +9,16 @@ public class Constants {
     public static final String SHOW_AI_STATE = "show_ai_state";
     public static final String SHOW_DEBUG_TEXT = "show_debug_text";
     public static final String START_MINIMIZED = "start_minimized";
+    public static final String SHOW_READ_SCREEN_BUTTON = "show_read_screen_button";
 
     private static boolean getBoolean(android.content.Context context,
                                       String key,
                                       boolean defaultValue) {
         return context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
                 .getBoolean(key, defaultValue);
+    }
+    public static boolean showReadScreenButton(android.content.Context context) {
+        return getBoolean(context, SHOW_READ_SCREEN_BUTTON, true);
     }
 
     public static boolean showStatusText(android.content.Context context) {

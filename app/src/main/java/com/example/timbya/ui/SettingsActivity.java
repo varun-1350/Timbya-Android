@@ -25,6 +25,7 @@ public class SettingsActivity extends AppCompatActivity {
         bindSwitch(R.id.switchProcessing, Constants.SHOW_AI_STATE, true);
         bindSwitch(R.id.switchTranscript, Constants.SHOW_DEBUG_TEXT, false);
         bindSwitch(R.id.switchStartMinimized, Constants.START_MINIMIZED, true);
+        bindSwitch(R.id.switchReadScreen, Constants.SHOW_READ_SCREEN_BUTTON, true);
     }
 
     private void bindSwitch(int switchId, String preferenceKey, boolean defaultValue) {

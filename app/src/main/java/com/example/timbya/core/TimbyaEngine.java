@@ -20,6 +20,12 @@ public class TimbyaEngine {
     private final ActionExecutor actionExecutor;
     private final GeminiManager geminiManager;
     private final MemoryManager memoryManager;
+    private static final long SCREEN_CONTEXT_TTL_MS = 5 * 60 * 1000L;
+    private static final int SCREEN_CONTEXT_TURNS = 3;
+
+    private String activeScreenContext = "";
+    private long screenContextExpiresAt = 0L;
+    private int screenContextTurnsRemaining = 0;
 
     public TimbyaEngine(ActionExecutor executor,
                         GeminiManager geminiManager,
@@ -46,6 +52,72 @@ public class TimbyaEngine {
             Log.e("TIMBYA_AI", "Failed to extract reply from Gemini response", e);
             return null;
         }
+    }
+
+    public void summarizeScreen(String screenText, TimbyaListener listener) {
+        String trimmedScreenText = screenText == null ? "" : screenText.trim();
+
+        if (trimmedScreenText.isEmpty()) {
+            listener.onError("I couldn't find readable text on this screen.");
+            return;
+        }
+
+        String prompt = PromptManager.buildScreenSummaryPrompt(trimmedScreenText);
+
+        geminiManager.askRaw(prompt, new Callback<>() {
+            @Override
+            public void onResponse(
+                    @NonNull Call<GeminiResponse> call,
+                    @NonNull Response<GeminiResponse> response) {
+
+                if (!response.isSuccessful() || response.body() == null) {
+                    listener.onError("I couldn't summarize this screen right now.");
+                    return;
+                }
+
+                String summary = extractReply(response.body());
+
+                if (summary == null || summary.trim().isEmpty()) {
+                    listener.onError("I couldn't create a summary for this screen.");
+                    return;
+                }
+
+                synchronized (TimbyaEngine.this) {
+                    activeScreenContext = trimmedScreenText;
+                    screenContextExpiresAt =
+                            System.currentTimeMillis() + SCREEN_CONTEXT_TTL_MS;
+                    screenContextTurnsRemaining = SCREEN_CONTEXT_TURNS;
+                }
+
+                listener.onReply(summary);
+            }
+
+            @Override
+            public void onFailure(
+                    @NonNull Call<GeminiResponse> call,
+                    @NonNull Throwable error) {
+                listener.onError("I couldn't summarize this screen right now.");
+            }
+        });
+    }
+
+    private synchronized String consumeScreenContext() {
+        if (screenContextTurnsRemaining <= 0
+                || System.currentTimeMillis() > screenContextExpiresAt) {
+            activeScreenContext = "";
+            screenContextTurnsRemaining = 0;
+            return "";
+        }
+
+        screenContextTurnsRemaining--;
+
+        String context = activeScreenContext;
+
+        if (screenContextTurnsRemaining == 0) {
+            activeScreenContext = "";
+        }
+
+        return context;
     }
 
     private final java.util.concurrent.ExecutorService actionExecutorPool =
@@ -93,7 +165,11 @@ public class TimbyaEngine {
     private void continueWithGemini(String command, TimbyaListener listener) {
         memoryManager.getRelevantMemories(command, memoryContext -> {
 
-            String prompt = PromptManager.buildPrompt(command, memoryContext, recentTurnsText());
+            String prompt = PromptManager.buildPrompt(
+                    command,
+                    memoryContext,
+                    recentTurnsText(),
+                    consumeScreenContext());
 
             geminiManager.askRaw(prompt, new Callback<>() {
 

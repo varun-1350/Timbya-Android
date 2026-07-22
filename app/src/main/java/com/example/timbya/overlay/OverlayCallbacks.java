@@ -5,4 +5,5 @@ public interface OverlayCallbacks {
     void onShrinkToggle();
     void onOpenSettings();
     void onClose();
+    void onReadScreen();
 }

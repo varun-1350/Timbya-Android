@@ -45,6 +45,8 @@ public class OverlayController {
     private ImageButton btnShrink;
     private ImageButton btnclose;
     private ImageButton btnSettings;
+    private ImageButton btnReadScreen;
+    private android.content.SharedPreferences settingsPreferences;
 
     private boolean shrunk = false;
 
@@ -56,6 +58,12 @@ public class OverlayController {
     private static final int CORNER_TL = 1;
     private static final int CORNER_BR = 2;
     private static final int CORNER_BL = 3;
+    private final android.content.SharedPreferences.OnSharedPreferenceChangeListener
+            settingsChangeListener = (preferences, key) -> {
+        if (Constants.SHOW_READ_SCREEN_BUTTON.equals(key)) {
+            updateReadScreenVisibility();
+        }
+    };
 
     private float touchStartRawX, touchStartRawY;
     private int paramsStartX, paramsStartY;
@@ -65,6 +73,16 @@ public class OverlayController {
         this.context = context;
         this.callbacks = callbacks;
         this.windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+    }
+    private void updateReadScreenVisibility() {
+        if (btnReadScreen == null) {
+            return;
+        }
+
+        btnReadScreen.setVisibility(
+                Constants.showReadScreenButton(context)
+                        ? View.VISIBLE
+                        : View.GONE);
     }
 
     public void show() {
@@ -87,8 +105,10 @@ public class OverlayController {
         reply = overlayView.findViewById(R.id.reply);
         mic = overlayView.findViewById(R.id.mic);
         btnShrink = overlayView.findViewById(R.id.btnShrink);
+        btnReadScreen = overlayView.findViewById(R.id.btnReadScreen);
         btnSettings = overlayView.findViewById(R.id.btnSettings);
         btnclose = overlayView.findViewById(R.id.btnClose);
+
 
         mic.setOnClickListener(v -> {
             if (callbacks != null) callbacks.onMicToggle();
@@ -102,6 +122,17 @@ public class OverlayController {
         btnclose.setOnClickListener(v -> {
             if (callbacks != null) callbacks.onClose();
         });
+        btnReadScreen.setOnClickListener(v -> {
+            if (callbacks != null) callbacks.onReadScreen();
+        });
+        settingsPreferences = context.getSharedPreferences(
+                Constants.PREFS_NAME,
+                Context.MODE_PRIVATE);
+
+        settingsPreferences.registerOnSharedPreferenceChangeListener(
+                settingsChangeListener);
+
+        updateReadScreenVisibility();
 
 
         bubble.setOnTouchListener(this::onBubbleTouch);
@@ -339,6 +370,11 @@ public class OverlayController {
     public void hide() {
         if (overlayView == null) return;
         if (snapAnimator != null) { snapAnimator.cancel(); snapAnimator = null; }
+        if (settingsPreferences != null) {
+            settingsPreferences.unregisterOnSharedPreferenceChangeListener(
+                    settingsChangeListener);
+            settingsPreferences = null;
+        }
         try {
             windowManager.removeView(overlayView);
         } catch (Exception e) {
@@ -350,6 +386,6 @@ public class OverlayController {
         overlayView = null; panelContainer = null; bubble = null;
         aiCore = null; aiCoreShrunk = null;
         status = null; reply = null; mic = null;
-        btnShrink = null; btnclose = null; btnSettings = null; params = null;
+        btnShrink = null; btnclose = null; btnSettings = null; params = null;btnReadScreen = null;
     }
 }

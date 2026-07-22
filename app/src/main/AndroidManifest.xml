@@ -52,6 +52,20 @@
             android:name=".services.OverlayService"
             android:foregroundServiceType="microphone"
             android:exported="false"/>
+        <service
+            android:name=".services.ScreenReadingAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:label="@string/app_name">
+
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/screen_reader_accessibility_service" />
+        </service>
         <activity
             android:name=".ui.MainActivity"
             android:theme="@style/Theme.Timbya.Launcher"

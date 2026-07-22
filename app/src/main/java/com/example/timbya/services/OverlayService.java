@@ -29,8 +29,12 @@ import com.example.timbya.speech.SpeechManager;
 import com.example.timbya.ui.MainActivity;
 import com.example.timbya.utils.Constants;
 import com.example.timbya.ui.SettingsActivity;
+import android.provider.Settings;
+
+import com.example.timbya.services.ScreenReadingAccessibilityService;
 
 public class OverlayService extends Service {
+    private boolean listenAfterScreenSummary = false;
 
     private static final String TAG = "TIMBYA_OVERLAY";
     private static final long SPEAKING_WATCHDOG_MS = 10_000L;
@@ -153,6 +157,11 @@ public class OverlayService extends Service {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
             }
+            @Override
+            public void onReadScreen() {
+                readAndSummarizeCurrentScreen();
+            }
+
 
             @Override
             public void onClose() {
@@ -170,6 +179,67 @@ public class OverlayService extends Service {
 
 
     }
+
+
+    private void readAndSummarizeCurrentScreen() {
+        if (!ScreenReadingAccessibilityService.isEnabled(this)) {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+
+            controller.setReply(
+                    "Enable Timbya in Accessibility settings, then return and press Read Screen.");
+            return;
+        }
+
+        ScreenReadingAccessibilityService screenReader =
+                ScreenReadingAccessibilityService.getInstance();
+
+        if (screenReader == null) {
+            controller.setReply(
+                    "Timbya's screen reader is still starting. Please try again in a moment.");
+            return;
+        }
+
+        resumeHandled = false;
+        speechManager.stopListening();
+        setState(TimbyaState.PROCESSING);
+
+        screenReader.readCurrentScreen(screenText -> {
+            if (screenText == null || screenText.trim().isEmpty()) {
+                speakScreenResult(
+                        "I couldn't find readable text on this screen. "
+                                + "This can happen in apps that do not expose their content.");
+                return;
+            }
+
+            engine.summarizeScreen(screenText, new TimbyaListener() {
+                @Override
+                public void onReply(String reply) {
+                    speakScreenResult(reply);
+                }
+
+                @Override
+                public void onError(String error) {
+                    speakScreenResult(error);
+                }
+            });
+        });
+    }
+
+    private void speakScreenResult(String reply) {
+        listenAfterScreenSummary = true;
+
+        controller.setReply(reply);
+        setState(TimbyaState.SPEAKING);
+
+        speechManager.mute();
+        armSpeakingWatchdog();
+
+        speaker.say(reply, () -> resumeOnce("screen-summary-done"));
+    }
+
+
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -216,10 +286,17 @@ public class OverlayService extends Service {
             Log.d(TAG, "resume already handled this turn, ignoring: " + source);
             return;
         }
+
         resumeHandled = true;
         cancelSpeakingWatchdog();
         setState(TimbyaState.LISTENING);
-        speechManager.resume();
+
+        if (listenAfterScreenSummary) {
+            listenAfterScreenSummary = false;
+            speechManager.startListening(speechListener);
+        } else {
+            speechManager.resume();
+        }
     }
 
     private void setState(TimbyaState newState) {
