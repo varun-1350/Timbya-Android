@@ -155,6 +155,7 @@ public class ContactResolver {
             previous[j] = j;
         }
 
+
         for (int i = 1; i <= left.length(); i++) {
             current[0] = i;
 
